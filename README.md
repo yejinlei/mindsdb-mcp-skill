@@ -227,6 +227,245 @@ npx @mindsdb/mcp-server
 根据技术文档回答设备报错0xE1怎么处理
 ```
 
+## 与其他框架集成
+
+### CrewAI集成
+
+CrewAI是一个强大的多Agent协作框架，支持通过MCP协议集成外部工具。以下是使用本技能与CrewAI集成的几种方式：
+
+#### 方法一：使用 MCP DSL（推荐）
+
+```python
+from crewai import Agent, Task, Crew, Process
+import os
+
+# 创建集成MindsDB MCP的Agent
+mindsdb_agent = Agent(
+    role="数据库分析师",
+    goal="通过自然语言查询和分析数据库",
+    backstory="专业的数据库分析师，精通SQL和数据分析",
+    
+    # 使用MCP DSL直接连接
+    mcps=[
+        f"https://cloud.mindsdb.com/mcp?api_key={os.getenv('MINDSDB_API_KEY')}"
+    ],
+    
+    verbose=True
+)
+
+# 创建任务
+task = Task(
+    description="查询sensor_data表，分析温度异常",
+    expected_output="温度异常分析报告",
+    agent=mindsdb_agent
+)
+
+# 执行
+crew = Crew(agents=[mindsdb_agent], tasks=[task])
+result = crew.kickoff()
+```
+
+#### 方法二：使用 MCPServerAdapter
+
+```python
+from crewai import Agent
+from crewai_tools import MCPServerAdapter
+from mcp import StdioServerParameters
+import os
+
+# 配置MCP服务器参数
+server_params = StdioServerParameters(
+    command="npx",
+    args=["@mindsdb/mcp-server"],
+    env={
+        "MINDSDB_API_KEY": os.getenv("MINDSDB_API_KEY"),
+        "MINDSDB_HOST": "cloud.mindsdb.com",
+        **os.environ
+    }
+)
+
+# 使用上下文管理器连接
+with MCPServerAdapter(server_params) as mcp_tools:
+    print(f"可用工具: {[tool.name for tool in mcp_tools]}")
+    
+    agent = Agent(
+        role="数据分析师",
+        goal="分析数据库数据",
+        backstory="专业的数据分析师",
+        tools=mcp_tools,
+        verbose=True
+    )
+```
+
+#### 方法三：筛选特定工具
+
+```python
+# 只加载SQL相关工具
+with MCPServerAdapter(server_params) as mcp_tools:
+    sql_agent = Agent(
+        role="SQL专家",
+        goal="执行SQL查询",
+        backstory="数据库查询专家",
+        tools=[
+            mcp_tools["sql_db_query"],
+            mcp_tools["sql_db_schema"],
+            mcp_tools["sql_db_list_tables"]
+        ],
+        verbose=True
+    )
+
+# 或通过构造函数筛选
+with MCPServerAdapter(server_params, "sql_db_query", "sql_db_schema") as mcp_tools:
+    query_agent = Agent(
+        role="查询专家",
+        goal="执行数据库查询",
+        backstory="专注于数据查询",
+        tools=mcp_tools,
+        verbose=True
+    )
+```
+
+#### 方法四：与 CrewBase 结合
+
+```python
+from crewai import Agent, CrewBase
+from mcp import StdioServerParameters
+import os
+
+@CrewBase
+class MindsDBCrew:
+    """集成MindsDB MCP的Crew"""
+    
+    mcp_server_params = [
+        StdioServerParameters(
+            command="npx",
+            args=["@mindsdb/mcp-server"],
+            env={
+                "MINDSDB_API_KEY": os.getenv("MINDSDB_API_KEY"),
+                **os.environ
+            }
+        )
+    ]
+    
+    @agent
+    def data_analyst(self):
+        return Agent(
+            role="数据分析师",
+            goal="分析数据库数据",
+            backstory="专业的数据分析师",
+            tools=self.get_mcp_tools(),
+            verbose=True
+        )
+    
+    @agent
+    def query_specialist(self):
+        return Agent(
+            role="查询专家",
+            goal="执行SQL查询",
+            backstory="SQL查询专家",
+            tools=self.get_mcp_tools("sql_db_query", "sql_db_schema"),
+            verbose=True
+        )
+```
+
+#### 完整示例：多Agent协作
+
+```python
+from crewai import Agent, Task, Crew, Process
+import os
+
+api_key = os.getenv("MINDSDB_API_KEY")
+
+# Agent 1: 数据库连接专家
+connection_agent = Agent(
+    role="数据库连接专家",
+    goal="连接和管理数据库连接",
+    backstory="精通各种数据库连接和配置",
+    mcps=[f"https://cloud.mindsdb.com/mcp?api_key={api_key}"],
+    verbose=True
+)
+
+# Agent 2: 数据分析专家
+analysis_agent = Agent(
+    role="数据分析专家",
+    goal="分析设备数据并发现异常",
+    backstory="资深数据分析师，擅长时序数据分析",
+    mcps=[f"https://cloud.mindsdb.com/mcp?api_key={api_key}#sql_db_query"],
+    verbose=True
+)
+
+# Agent 3: 报告生成专家
+report_agent = Agent(
+    role="报告生成专家",
+    goal="生成专业的分析报告",
+    backstory="技术文档撰写专家",
+    verbose=True
+)
+
+# 创建任务
+tasks = [
+    Task(
+        description="连接TDengine数据库，验证sensor_data表是否存在",
+        expected_output="连接状态和表结构信息",
+        agent=connection_agent
+    ),
+    Task(
+        description="分析sensor_data表，找出温度超过80度的异常设备",
+        expected_output="数据分析结果和异常设备列表",
+        agent=analysis_agent
+    ),
+    Task(
+        description="生成包含维护建议的专业报告",
+        expected_output="结构化的分析报告",
+        agent=report_agent
+    )
+]
+
+# 创建并执行Crew
+crew = Crew(
+    agents=[connection_agent, analysis_agent, report_agent],
+    tasks=tasks,
+    process=Process.sequential,
+    verbose=True
+)
+
+result = crew.kickoff()
+print(result)
+```
+
+#### 环境配置
+
+```bash
+# 安装依赖
+pip install crewai crewai-tools[mcp]
+
+# 设置环境变量
+export MINDSDB_API_KEY="your-api-key"
+export MINDSDB_HOST="cloud.mindsdb.com"
+```
+
+#### 最佳实践
+
+1. **使用特定工具筛选**: 通过 `#` 语法只加载需要的工具
+   ```python
+   mcps=["https://cloud.mindsdb.com/mcp?api_key=key#sql_db_query"]
+   ```
+
+2. **安全处理密钥**: 使用环境变量，不要硬编码
+   ```python
+   api_key = os.getenv("MINDSDB_API_KEY")
+   ```
+
+3. **配置备用服务器**: 确保任务不会因单点故障失败
+   ```python
+   mcps=[
+       "https://cloud.mindsdb.com/mcp?api_key=primary_key",
+       "https://backup.mindsdb.com/mcp?api_key=backup_key"
+   ]
+   ```
+
+4. **合理设置超时**: CrewAI默认连接超时10秒，执行超时30秒
+
 ## 支持的数据源
 
 ### 关系型数据库
