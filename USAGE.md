@@ -464,3 +464,237 @@ FROM orders
 **原因**: 查询过于复杂或数据量过大
 
 **解决**: 优化查询，添加索引，或增加超时时间
+
+## 时序数据库应用
+
+### 工业设备监控
+
+#### 连接TDengine数据库
+
+```
+连接到TDengine数据库，监控工业设备数据
+```
+
+**SQL示例:**
+```sql
+CREATE DATABASE industrial_tdengine
+WITH ENGINE = 'tdengine',
+PARAMETERS = {
+  'host': '192.168.1.100',
+  'port': 6030,
+  'database': 'industrial_plant',
+  'user': 'root',
+  'password': 'taosdata',
+  'timezone': 'Asia/Shanghai'
+}
+```
+
+#### 查询实时水质数据
+
+```
+查询1号工业设备过去24小时的水质数据
+```
+
+**SQL示例:**
+```sql
+SELECT 
+  ts,
+  location_id,
+  flow_rate,
+  pressure,
+  temperature,
+  flow_rate,
+  vibration,
+  temperature,
+  power_consumption,
+  rpm,
+  status
+FROM industrial_tdengine.sensor_data
+WHERE location_id = 'plant_001'
+  AND ts > NOW() - INTERVAL 24 HOUR
+ORDER BY ts DESC
+```
+
+#### 查询设备运行状态
+
+```
+检查所有设备的运行状态，找出异常设备
+```
+
+**SQL示例:**
+```sql
+SELECT 
+  ts,
+  device_id,
+  device_name,
+  running_status,
+  power_consumption,
+  vibration_level,
+  temperature,
+  alarm_status,
+  CASE 
+    WHEN alarm_status = 'normal' THEN '正常运行'
+    WHEN alarm_status = 'warning' THEN '警告'
+    WHEN alarm_status = 'critical' THEN '严重告警'
+    ELSE '未知状态'
+  END as status_description
+FROM industrial_tdengine.device_status
+WHERE location_id = 'plant_001'
+  AND ts > NOW() - INTERVAL 1 HOUR
+  AND alarm_status != 'normal'
+ORDER BY ts DESC
+```
+
+#### 统计日处理量
+
+```
+统计过去7天的日处理量
+```
+
+**SQL示例:**
+```sql
+SELECT 
+  _wstart AS date,
+  AVG(flow_rate) AS avg_temp,
+  MAX(flow_rate) AS max_temp,
+  MIN(flow_rate) AS min_temp,
+  SUM(flow_rate) * 24 AS daily_power,
+  AVG(temperature) AS avg_efficiency,
+  AVG(pressure) AS avg_rpm
+FROM industrial_tdengine.sensor_data
+WHERE location_id = 'plant_001'
+  AND ts > NOW() - INTERVAL 7 DAYS
+INTERVAL(1d)
+```
+
+#### 异常检测查询
+
+```
+检测水质指标异常（温度超过500或pH值不在6-9范围内）
+```
+
+**SQL示例:**
+```sql
+SELECT 
+  ts,
+  location_id,
+  temperature,
+  pressure,
+  CASE 
+    WHEN temperature > 500 THEN '温度超标'
+    WHEN pressure < 6 OR pressure > 9 THEN 'pH异常'
+    ELSE '正常'
+  END as abnormal_type,
+  CASE 
+    WHEN temperature > 500 THEN '温度浓度超过500mg/L，需要调整处理工艺'
+    WHEN pressure < 6 THEN 'pH值过低，需要添加碱性物质调节'
+    WHEN pressure > 9 THEN 'pH值过高，需要添加酸性物质调节'
+    ELSE '水质指标正常'
+  END as suggestion
+FROM industrial_tdengine.sensor_data
+WHERE location_id = 'plant_001'
+  AND ts > NOW() - INTERVAL 24 HOUR
+  AND (temperature > 500 OR pressure < 6 OR pressure > 9)
+ORDER BY ts DESC
+```
+
+#### 创建设备故障预测模型
+
+```
+创建设备故障预测模型，提前预警设备故障
+```
+
+**SQL示例:**
+```sql
+CREATE MODEL mindsdb.equipment_failure_predictor
+PREDICT will_fail
+FROM industrial_tdengine.device_status
+USING
+  engine = 'xgboost',
+  problem_type = 'classification',
+  target = 'will_fail',
+  input_features = [
+    'vibration_level',
+    'temperature',
+    'power_consumption',
+    'running_hours',
+    'maintenance_count'
+  ],
+  training_data = (
+    SELECT 
+      vibration_level,
+      temperature,
+      power_consumption,
+      running_hours,
+      maintenance_count,
+      CASE WHEN alarm_status = 'critical' THEN 1 ELSE 0 END as will_fail
+    FROM industrial_tdengine.device_status
+    WHERE ts > NOW() - INTERVAL 90 DAYS
+  )
+```
+
+#### 预测性维护查询
+
+```
+预测哪些设备可能会在未来7天内发生故障
+```
+
+**SQL示例:**
+```sql
+SELECT 
+  device_id,
+  device_name,
+  will_fail,
+  failure_probability,
+  CASE 
+    WHEN failure_probability > 0.8 THEN '立即维护'
+    WHEN failure_probability > 0.5 THEN '计划维护'
+    ELSE '正常运行'
+  END as maintenance_priority,
+  '建议检查设备振动、温度和功耗' as maintenance_suggestion
+FROM mindsdb.equipment_failure_predictor
+WHERE will_fail = 1
+  AND failure_probability > 0.5
+ORDER BY failure_probability DESC
+```
+
+### 工业物联网监控
+
+#### 连接InfluxDB
+
+```
+连接到InfluxDB，监控工厂生产线
+```
+
+**SQL示例:**
+```sql
+CREATE DATABASE factory_influxdb
+WITH ENGINE = 'influxdb',
+PARAMETERS = {
+  'host': '192.168.1.101',
+  'port': 8086,
+  'database': 'factory_metrics',
+  'user': 'admin',
+  'password': 'password'
+}
+```
+
+#### 查询能耗数据
+
+```
+分析生产线的能耗情况
+```
+
+**SQL示例:**
+```sql
+SELECT 
+  time,
+  production_line,
+  machine_id,
+  power_consumption,
+  energy_cost,
+  efficiency_rate
+FROM factory_influxdb.energy_metrics
+WHERE time > NOW() - INTERVAL 24 HOUR
+ORDER BY time DESC
+```

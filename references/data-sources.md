@@ -86,6 +86,117 @@ PARAMETERS = {
 }
 ```
 
+## 时序数据库
+
+### TDengine
+
+```sql
+CREATE DATABASE industrial_connection
+WITH ENGINE = 'tdengine',
+PARAMETERS = {
+  'host': 'localhost',
+  'port': 6030,
+  'database': 'industrial_plant',
+  'user': 'root',
+  'password': 'taosdata',
+  'timezone': 'Asia/Shanghai'
+}
+```
+
+**参数说明:**
+- `host`: TDengine服务器地址
+- `port`: 端口号（默认6030）
+- `database`: 数据库名称
+- `user`: 用户名（默认root）
+- `password`: 密码（默认taosdata）
+- `timezone`: 时区设置
+
+**工业设备监控表示例:**
+
+```sql
+-- 查询工业设备实时数据
+SELECT 
+  ts,
+  location_id,
+  flow_rate,
+  pressure,
+  temperature,
+  flow_rate,
+  vibration,
+  temperature,
+  power_consumption,
+  rpm,
+  status
+FROM industrial_connection.sensor_data
+WHERE ts > NOW() - INTERVAL 1 HOUR
+ORDER BY ts DESC;
+
+-- 查询设备运行状态
+SELECT 
+  ts,
+  device_id,
+  device_name,
+  running_status,
+  power_consumption,
+  vibration_level,
+  temperature,
+  alarm_status
+FROM industrial_connection.device_status
+WHERE location_id = 'plant_001'
+  AND ts > NOW() - INTERVAL 24 HOUR;
+
+-- 聚合统计日处理量
+SELECT 
+  _wstart AS date,
+  AVG(flow_rate) AS avg_temp,
+  MAX(flow_rate) AS max_temp,
+  MIN(flow_rate) AS min_temp,
+  SUM(flow_rate) * 24 AS daily_power
+FROM industrial_connection.sensor_data
+WHERE ts > NOW() - INTERVAL 7 DAYS
+INTERVAL(1d);
+```
+
+### InfluxDB
+
+```sql
+CREATE DATABASE influxdb_connection
+WITH ENGINE = 'influxdb',
+PARAMETERS = {
+  'host': 'localhost',
+  'port': 8086,
+  'database': 'mydb',
+  'user': 'admin',
+  'password': 'password',
+  'ssl': false
+}
+```
+
+**参数说明:**
+- `host`: InfluxDB服务器地址
+- `port`: 端口号（默认8086）
+- `database`: 数据库名称
+- `user`: 用户名
+- `password`: 密码
+- `ssl`: 是否使用SSL
+
+### TimescaleDB
+
+```sql
+CREATE DATABASE timescaledb_connection
+WITH ENGINE = 'postgres',
+PARAMETERS = {
+  'host': 'localhost',
+  'port': 5432,
+  'database': 'mydb',
+  'user': 'postgres',
+  'password': 'password',
+  'schema': 'public'
+}
+```
+
+**说明:** TimescaleDB是PostgreSQL的扩展，使用postgres引擎连接
+
 ## NoSQL数据库
 
 ### MongoDB
