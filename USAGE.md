@@ -467,6 +467,26 @@ FROM orders
 
 ## 时序数据库应用
 
+### 重要说明
+
+**本文档中的表名和字段名仅为示例！**
+
+Agent会自动适配你的实际数据库结构：
+- 表名可以是任意的（如：`sensor_data`, `monitor_table`, `iot_metrics`等）
+- 字段名可以是任意的（如：`temperature`, `pressure`, `flow_rate`等）
+- Agent会自动查询数据库元数据，发现你的表结构
+- Agent会根据你的实际表名和字段名生成SQL
+
+**使用方式:**
+```
+用户: "连接到我的TDengine数据库，查询工业设备数据"
+Agent会:
+1. 连接数据库
+2. 查询表结构（SHOW TABLES, DESCRIBE TABLE）
+3. 根据你的实际表名和字段名生成SQL
+4. 执行查询并返回结果
+```
+
 ### 工业设备监控
 
 #### 连接TDengine数据库
@@ -489,10 +509,10 @@ PARAMETERS = {
 }
 ```
 
-#### 查询实时水质数据
+#### 查询实时设备数据
 
 ```
-查询1号工业设备过去24小时的水质数据
+查询1号车间过去24小时的设备数据
 ```
 
 **SQL示例:**
@@ -500,17 +520,16 @@ PARAMETERS = {
 SELECT 
   ts,
   location_id,
-  flow_rate,
-  pressure,
   temperature,
+  pressure,
   flow_rate,
   vibration,
-  temperature,
   power_consumption,
   rpm,
+  efficiency,
   status
 FROM industrial_tdengine.sensor_data
-WHERE location_id = 'plant_001'
+WHERE location_id = 'workshop_001'
   AND ts > NOW() - INTERVAL 24 HOUR
 ORDER BY ts DESC
 ```
@@ -539,30 +558,29 @@ SELECT
     ELSE '未知状态'
   END as status_description
 FROM industrial_tdengine.device_status
-WHERE location_id = 'plant_001'
+WHERE location_id = 'workshop_001'
   AND ts > NOW() - INTERVAL 1 HOUR
   AND alarm_status != 'normal'
 ORDER BY ts DESC
 ```
 
-#### 统计日处理量
+#### 统计日运行数据
 
 ```
-统计过去7天的日处理量
+统计过去7天的日运行数据
 ```
 
 **SQL示例:**
 ```sql
 SELECT 
   _wstart AS date,
-  AVG(flow_rate) AS avg_temp,
-  MAX(flow_rate) AS max_temp,
-  MIN(flow_rate) AS min_temp,
-  SUM(flow_rate) * 24 AS daily_power,
-  AVG(temperature) AS avg_efficiency,
-  AVG(pressure) AS avg_rpm
+  AVG(temperature) AS avg_temp,
+  MAX(temperature) AS max_temp,
+  MIN(temperature) AS min_temp,
+  AVG(power_consumption) AS avg_power,
+  AVG(efficiency) AS avg_efficiency
 FROM industrial_tdengine.sensor_data
-WHERE location_id = 'plant_001'
+WHERE location_id = 'workshop_001'
   AND ts > NOW() - INTERVAL 7 DAYS
 INTERVAL(1d)
 ```
@@ -570,7 +588,7 @@ INTERVAL(1d)
 #### 异常检测查询
 
 ```
-检测水质指标异常（温度超过500或pH值不在6-9范围内）
+检测设备参数异常（温度超过80度或压力超过10MPa）
 ```
 
 **SQL示例:**
@@ -581,20 +599,19 @@ SELECT
   temperature,
   pressure,
   CASE 
-    WHEN temperature > 500 THEN '温度超标'
-    WHEN pressure < 6 OR pressure > 9 THEN 'pH异常'
+    WHEN temperature > 80 THEN '温度过高'
+    WHEN pressure > 10 THEN '压力过高'
     ELSE '正常'
   END as abnormal_type,
   CASE 
-    WHEN temperature > 500 THEN '温度浓度超过500mg/L，需要调整处理工艺'
-    WHEN pressure < 6 THEN 'pH值过低，需要添加碱性物质调节'
-    WHEN pressure > 9 THEN 'pH值过高，需要添加酸性物质调节'
-    ELSE '水质指标正常'
+    WHEN temperature > 80 THEN '温度超过80°C，需要检查冷却系统'
+    WHEN pressure > 10 THEN '压力超过10MPa，需要检查压力控制阀'
+    ELSE '设备参数正常'
   END as suggestion
 FROM industrial_tdengine.sensor_data
-WHERE location_id = 'plant_001'
+WHERE location_id = 'workshop_001'
   AND ts > NOW() - INTERVAL 24 HOUR
-  AND (temperature > 500 OR pressure < 6 OR pressure > 9)
+  AND (temperature > 80 OR pressure > 10)
 ORDER BY ts DESC
 ```
 
@@ -606,7 +623,7 @@ ORDER BY ts DESC
 
 **SQL示例:**
 ```sql
-CREATE MODEL mindsdb.equipment_failure_predictor
+CREATE MODEL mindsdb.device_failure_predictor
 PREDICT will_fail
 FROM industrial_tdengine.device_status
 USING
@@ -652,7 +669,7 @@ SELECT
     ELSE '正常运行'
   END as maintenance_priority,
   '建议检查设备振动、温度和功耗' as maintenance_suggestion
-FROM mindsdb.equipment_failure_predictor
+FROM mindsdb.device_failure_predictor
 WHERE will_fail = 1
   AND failure_probability > 0.5
 ORDER BY failure_probability DESC

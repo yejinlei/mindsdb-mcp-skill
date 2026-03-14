@@ -118,14 +118,13 @@ PARAMETERS = {
 SELECT 
   ts,
   location_id,
-  flow_rate,
-  pressure,
   temperature,
+  pressure,
   flow_rate,
   vibration,
-  temperature,
   power_consumption,
   rpm,
+  efficiency,
   status
 FROM industrial_connection.sensor_data
 WHERE ts > NOW() - INTERVAL 1 HOUR
@@ -142,16 +141,16 @@ SELECT
   temperature,
   alarm_status
 FROM industrial_connection.device_status
-WHERE location_id = 'plant_001'
+WHERE location_id = 'workshop_001'
   AND ts > NOW() - INTERVAL 24 HOUR;
 
--- 聚合统计日处理量
+-- 聚合统计日运行数据
 SELECT 
   _wstart AS date,
-  AVG(flow_rate) AS avg_temp,
-  MAX(flow_rate) AS max_temp,
-  MIN(flow_rate) AS min_temp,
-  SUM(flow_rate) * 24 AS daily_power
+  AVG(temperature) AS avg_temp,
+  MAX(temperature) AS max_temp,
+  MIN(temperature) AS min_temp,
+  AVG(power_consumption) AS avg_power
 FROM industrial_connection.sensor_data
 WHERE ts > NOW() - INTERVAL 7 DAYS
 INTERVAL(1d);

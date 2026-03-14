@@ -48,6 +48,16 @@ logs/
 
 # Test coverage
 htmlcov/
+
+# User data files (case studies, examples, etc.)
+*.mhtml
+*.html
+*.pdf
+*.docx
+*.xlsx
+case-studies/
+examples/
+user-data/
 .tox/
 .coverage
 .coverage.*
