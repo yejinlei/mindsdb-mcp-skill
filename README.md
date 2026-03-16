@@ -139,14 +139,16 @@ Agent自动完成 / Agent automatically:
 
 ## 安装步骤
 
-### 1. 安装MindsDB MCP服务器
+### 1. 安装MindsDB
+
+MindsDB已内置MCP服务器功能，无需单独安装MCP服务器。
 
 ```bash
-# 使用npm安装
-npm install -g @mindsdb/mcp-server
+# 安装MindsDB
+pip install mindsdb
 
-# 或使用npx直接运行
-npx @mindsdb/mcp-server
+# 启动MindsDB
+mindsdb
 ```
 
 ### 2. 配置Claude Desktop
@@ -163,15 +165,10 @@ npx @mindsdb/mcp-server
 {
   "mcpServers": {
     "mindsdb": {
-      "command": "node",
-      "args": [
-        "/path/to/mindsdb-mcp-server/dist/index.js"
-      ],
-      "env": {
-        "MINDSDB_API_KEY": "your-api-key",
-        "MINDSDB_HOST": "localhost",
-        "MINDSDB_PORT": "47334"
-      }
+      "type": "url",
+      "url": "http://localhost:47334/mcp/sse",
+      "name": "mindsdb-mcp",
+      "authorization_token": "your-mindsdb-token"
     }
   }
 }
@@ -265,27 +262,18 @@ crew = Crew(agents=[mindsdb_agent], tasks=[task])
 result = crew.kickoff()
 ```
 
-#### 方法二：使用 MCPServerAdapter
+#### 方法二：使用 MCPServerAdapter（本地MindsDB）
 
 ```python
 from crewai import Agent
 from crewai_tools import MCPServerAdapter
-from mcp import StdioServerParameters
 import os
 
-# 配置MCP服务器参数
-server_params = StdioServerParameters(
-    command="npx",
-    args=["@mindsdb/mcp-server"],
-    env={
-        "MINDSDB_API_KEY": os.getenv("MINDSDB_API_KEY"),
-        "MINDSDB_HOST": "cloud.mindsdb.com",
-        **os.environ
-    }
-)
+# 直接使用MindsDB内置的MCP服务器
+# 注意：需要先启动MindsDB服务
 
 # 使用上下文管理器连接
-with MCPServerAdapter(server_params) as mcp_tools:
+with MCPServerAdapter("http://localhost:47334/mcp/sse") as mcp_tools:
     print(f"可用工具: {[tool.name for tool in mcp_tools]}")
     
     agent = Agent(
@@ -300,26 +288,16 @@ with MCPServerAdapter(server_params) as mcp_tools:
 #### 方法三：筛选特定工具
 
 ```python
+# 直接使用MindsDB内置的MCP服务器
+from crewai import Agent
+from crewai_tools import MCPServerAdapter
+
 # 只加载SQL相关工具
-with MCPServerAdapter(server_params) as mcp_tools:
+with MCPServerAdapter("http://localhost:47334/mcp/sse", "sql_db_query", "sql_db_schema", "sql_db_list_tables") as mcp_tools:
     sql_agent = Agent(
         role="SQL专家",
         goal="执行SQL查询",
         backstory="数据库查询专家",
-        tools=[
-            mcp_tools["sql_db_query"],
-            mcp_tools["sql_db_schema"],
-            mcp_tools["sql_db_list_tables"]
-        ],
-        verbose=True
-    )
-
-# 或通过构造函数筛选
-with MCPServerAdapter(server_params, "sql_db_query", "sql_db_schema") as mcp_tools:
-    query_agent = Agent(
-        role="查询专家",
-        goal="执行数据库查询",
-        backstory="专注于数据查询",
         tools=mcp_tools,
         verbose=True
     )
@@ -329,23 +307,14 @@ with MCPServerAdapter(server_params, "sql_db_query", "sql_db_schema") as mcp_too
 
 ```python
 from crewai import Agent, CrewBase
-from mcp import StdioServerParameters
 import os
 
 @CrewBase
 class MindsDBCrew:
     """集成MindsDB MCP的Crew"""
     
-    mcp_server_params = [
-        StdioServerParameters(
-            command="npx",
-            args=["@mindsdb/mcp-server"],
-            env={
-                "MINDSDB_API_KEY": os.getenv("MINDSDB_API_KEY"),
-                **os.environ
-            }
-        )
-    ]
+    # 直接使用MindsDB内置的MCP服务器
+    mcp_server_params = ["http://localhost:47334/mcp/sse"]
     
     @agent
     def data_analyst(self):
@@ -372,16 +341,13 @@ class MindsDBCrew:
 
 ```python
 from crewai import Agent, Task, Crew, Process
-import os
-
-api_key = os.getenv("MINDSDB_API_KEY")
 
 # Agent 1: 数据库连接专家
 connection_agent = Agent(
     role="数据库连接专家",
     goal="连接和管理数据库连接",
     backstory="精通各种数据库连接和配置",
-    mcps=[f"https://cloud.mindsdb.com/mcp?api_key={api_key}"],
+    mcps=["http://localhost:47334/mcp/sse"],
     verbose=True
 )
 
@@ -390,7 +356,7 @@ analysis_agent = Agent(
     role="数据分析专家",
     goal="分析设备数据并发现异常",
     backstory="资深数据分析师，擅长时序数据分析",
-    mcps=[f"https://cloud.mindsdb.com/mcp?api_key={api_key}#sql_db_query"],
+    mcps=["http://localhost:47334/mcp/sse#sql_db_query"],
     verbose=True
 )
 
@@ -439,9 +405,8 @@ print(result)
 # 安装依赖
 pip install crewai crewai-tools[mcp]
 
-# 设置环境变量
-export MINDSDB_API_KEY="your-api-key"
-export MINDSDB_HOST="cloud.mindsdb.com"
+# 启动MindsDB服务
+mindsdb
 ```
 
 #### 最佳实践

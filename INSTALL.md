@@ -2,38 +2,26 @@
 
 ## 前置要求
 
-- Node.js 18+ 
 - Claude Desktop (2024年11月后版本)
-- MindsDB账户或本地MindsDB实例
+- 本地MindsDB实例或MindsDB Cloud账户
 
 ## 安装步骤
 
-### 方法1: 使用npm全局安装
+### 1. 安装MindsDB
+
+MindsDB已内置MCP服务器功能，无需单独安装MCP服务器。
 
 ```bash
-npm install -g @mindsdb/mcp-server
+# 安装MindsDB
+pip install mindsdb
+
+# 启动MindsDB
+mindsdb
 ```
 
-### 方法2: 使用npx直接运行（无需安装）
+### 2. 配置Claude Desktop
 
-```bash
-npx @mindsdb/mcp-server
-```
-
-### 方法3: 从源码安装
-
-```bash
-git clone https://github.com/mindsdb/mcp-server.git
-cd mcp-server
-npm install
-npm run build
-```
-
-## 配置Claude Desktop
-
-### 1. 找到配置文件
-
-根据你的操作系统，配置文件位置如下：
+根据你的操作系统，找到配置文件：
 
 **Windows:**
 ```
@@ -50,7 +38,7 @@ npm run build
 ~/.config/Claude/claude_desktop_config.json
 ```
 
-### 2. 编辑配置文件
+### 3. 编辑配置文件
 
 在配置文件中添加MindsDB MCP服务器配置：
 
@@ -58,58 +46,33 @@ npm run build
 {
   "mcpServers": {
     "mindsdb": {
-      "command": "node",
-      "args": [
-        "C:\\Users\\YourUsername\\AppData\\Roaming\\npm\\node_modules\\@mindsdb\\mcp-server\\dist\\index.js"
-      ],
-      "env": {
-        "MINDSDB_API_KEY": "your-api-key-here",
-        "MINDSDB_HOST": "localhost",
-        "MINDSDB_PORT": "47334"
-      }
+      "type": "url",
+      "url": "http://localhost:47334/mcp/sse",
+      "name": "mindsdb-mcp",
+      "authorization_token": "your-mindsdb-token"
     }
   }
 }
 ```
 
-### 3. 配置参数说明
+### 4. 配置参数说明
 
 | 参数 | 说明 | 示例 |
 |------|------|------|
-| `MINDSDB_API_KEY` | MindsDB Cloud API密钥 | `sk-xxxxxxxxxxxx` |
-| `MINDSDB_HOST` | MindsDB服务器地址 | `localhost` 或 `cloud.mindsdb.com` |
-| `MINDSDB_PORT` | MindsDB服务器端口 | `47334` 或 `443` |
-| `MINDSDB_USER` | 用户名（可选） | `admin` |
-| `MINDSDB_PASSWORD` | 密码（可选） | `password` |
+| `url` | MCP服务器地址 | `http://localhost:47334/mcp/sse` 或 `https://cloud.mindsdb.com/mcp/sse` |
+| `authorization_token` | 认证令牌（可选） | `your-mindsdb-token` |
 
-### 4. 使用本地MindsDB实例
+### 5. 使用MindsDB Cloud
 
-如果你使用本地MindsDB实例：
-
-```bash
-# 安装MindsDB
-pip install mindsdb
-
-# 启动MindsDB
-mindsdb
-```
-
-配置文件：
+如果你使用MindsDB Cloud，配置如下：
 
 ```json
 {
   "mcpServers": {
     "mindsdb": {
-      "command": "node",
-      "args": [
-        "C:\\path\\to\\mcp-server\\dist\\index.js"
-      ],
-      "env": {
-        "MINDSDB_HOST": "localhost",
-        "MINDSDB_PORT": "47334",
-        "MINDSDB_USER": "mindsdb",
-        "MINDSDB_PASSWORD": ""
-      }
+      "type": "url",
+      "url": "https://cloud.mindsdb.com/mcp/sse?api_key=your-api-key",
+      "name": "mindsdb-cloud-mcp"
     }
   }
 }
