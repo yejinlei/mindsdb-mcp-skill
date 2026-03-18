@@ -186,9 +186,32 @@ class MindsDBSkill:
         
         # 禁止删除、变更目标数据库数据的操作
         # 允许对MindsDB的操作（如创建数据库连接、创建知识库），但禁止对目标数据库的修改操作
-        prohibited_actions = ["exec_sql", "delete_kb"]
+        prohibited_actions = ["delete_kb"]
         if action in prohibited_actions:
             return self._generate_response(-15, f"Action {action} is prohibited (本SKILL禁止删除、变更目标数据库数据)")
+        
+        # 检查 exec_sql 操作的 SQL 语句
+        if action == "exec_sql":
+            sql = params.get("sql", "").strip().upper()
+            # 允许的只读操作
+            allowed_read_only_commands = ["SELECT", "SHOW", "DESCRIBE", "EXPLAIN", "PRAGMA"]
+            # 禁止的修改操作
+            prohibited_modify_commands = ["INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER", "TRUNCATE", "REPLACE", "MERGE"]
+            
+            # 检查是否包含禁止的修改操作
+            for cmd in prohibited_modify_commands:
+                if sql.startswith(cmd):
+                    return self._generate_response(-16, f"SQL command {cmd} is prohibited (本SKILL禁止修改数据库数据)")
+            
+            # 检查是否为允许的只读操作
+            is_read_only = False
+            for cmd in allowed_read_only_commands:
+                if sql.startswith(cmd):
+                    is_read_only = True
+                    break
+            
+            if not is_read_only:
+                return self._generate_response(-17, "Only read-only SQL commands are allowed (本SKILL只允许只读SQL操作)")
         
         # 根据action补全必传参数
         required_params = {
@@ -196,6 +219,7 @@ class MindsDBSkill:
             "list_databases": [],
             "show_table_schema": ["database"],
             "nl_query": ["database", "nl_text"],
+            "exec_sql": ["database", "sql"],  # 执行SQL语句（只读操作）
             # RAG核心动作参数
             "create_kb": ["kb_name"],  # 创建知识库（允许），database为可选参数
             "query_kb": ["kb_name", "nl_text"],  # RAG智能问答（允许），database为可选参数
@@ -254,7 +278,7 @@ class MindsDBSkill:
                 # duckdb可以直接使用本地文件，或使用mindsdb内置的duckdb
                 db_file = params.get("db_file", "")
                 path = params.get("path", "")
-                db_path = db_file or path
+                db_path = params.get("db_path", "") or db_file or path
                 database_name = params.get("database", "duck_db")
                 
                 if db_path:
@@ -283,7 +307,10 @@ class MindsDBSkill:
                 "query": f"SELECT * FROM {database}.nl_query('{nl_text}')"
             }
         elif action == "exec_sql":
-            request_body = {"query": params["sql"]}
+            # 确保使用指定的数据库
+            database = params.get("database")
+            sql = params["sql"]
+            request_body = {"query": sql}
         # RAG核心动作：创建知识库（优化逻辑，关联数据源并添加可选配置，适配所有支持的数据源）
         elif action == "create_kb":
             # MindsDB 26.x 正确语法: CREATE KNOWLEDGE_BASE database.kb_name
