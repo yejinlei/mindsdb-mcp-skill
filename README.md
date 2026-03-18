@@ -40,8 +40,6 @@ This skill package is centered around RAG (Retrieval-Augmented Generation), enca
 
 安装技能包所需依赖，执行以下命令：
 
-Install the dependencies required for the skill package by executing the following command:
-
 ```bash
 pip install requests
 ```
@@ -102,6 +100,7 @@ set MINDSDB_PASSWORD=password123
 ```
 mindsdb-mcp-skill/
 ├── scripts/
+│   ├── data_dictionary.py  # 数据字典实现
 │   └── mindsdb_skill.py  # 核心技能代码（包含RAG全流程实现）
 ├── evals/
 │   └── evals.json        # 测试用例
