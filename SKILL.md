@@ -1,10 +1,8 @@
-SKILL.md（完整版·Markdown可直接拷贝）
-
 name: mindsdb-mcp-skill
 
 description: MindsDB MCP 服务器交互技能，用于通过自然语言查询和操作 200+ 企业级数据源。当用户需要查询数据库、分析数据、创建 AI 模型、连接数据源（MySQL、PostgreSQL、MongoDB、ClickHouse、TDengine、TiDB、DuckDB、Excel、CSV、Gmail、Slack 等）、执行 SQL 查询、进行数据预测、构建知识库（RAG）、智能问答、文档检索或任何与数据库交互的任务时使用此技能。即使没有明确提到 MindsDB，只要涉及数据库操作、数据分析、数据查询、知识库构建、AI 问答或需要连接多个数据源的场景，都应该使用此技能。本技能支持所有 MindsDB 兼容的数据库，不限于文档中列出的类型，无需修改代码即可适配新的 MindsDB 支持数据源。**核心价值**：任意 Agent（包括 AI IDE）可通过本技能实现 NLP2SQL 能力，无需在 MindsDB EDIT 内定义 Agent+RAG，通过外部 Agent+SKILL+MindsDB 的组合方式，大大提升效率和通用性。| MindsDB MCP Server Interaction Skill for querying and operating 200+ enterprise-level data sources through natural language. Use this skill when users need to query databases, analyze data, create AI models, connect data sources (MySQL, PostgreSQL, MongoDB, ClickHouse, TDengine, TiDB, DuckDB, Excel, CSV, Gmail, Slack, etc.), execute SQL queries, perform data prediction, build knowledge bases (RAG), conduct intelligent Q&A, retrieve documents, or perform any database-related tasks. Even if MindsDB is not explicitly mentioned, this skill should be used for scenarios involving database operations, data analysis, data queries, knowledge base construction, AI Q&A, or multi-data source connections. This skill supports all MindsDB-compatible databases, not limited to those listed in the documentation, and can adapt to new MindsDB-supported data sources without modifying code. **Core Value**: Any Agent (including AI IDE) can implement NLP2SQL capabilities through this skill, without defining Agent+RAG within MindsDB EDIT. The combination of external Agent+SKILL+MindsDB greatly improves efficiency and versatility.
 
-version: 1.1.0
+version: 1.2.0
 
 author: yejinlei
 
