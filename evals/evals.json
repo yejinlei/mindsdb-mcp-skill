@@ -1,125 +1,249 @@
 {
   "skill_name": "mindsdb-mcp-skill",
+  "version": "2.0",
+  "architecture": "three-module",
+  "modules": {
+    "db_connector": "公共数据库连接模块",
+    "workflow_rag_build": "本地RAG构建与管理工作流",
+    "workflow_rag_analysis": "基于RAG的NLP2SQL和数据分析工作流"
+  },
   "evals": [
     {
       "id": 1,
-      "prompt": "我想查询MySQL数据库中employees表的所有数据",
-      "expected_output": "应该连接到MySQL数据库并执行SELECT查询，返回employees表的所有数据",
-      "files": []
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "连接到DuckDB数据库文件weekly_report_warehouse.duckdb",
+      "expected_output": "应该成功创建数据库连接，返回连接成功的响应",
+      "action": "connect_db",
+      "params": {
+        "db_type": "duckdb",
+        "db_path": "data/weekly_report_warehouse.duckdb",
+        "database": "warehouse_db"
+      }
     },
     {
       "id": 2,
-      "prompt": "分析PostgreSQL数据库中orders表的月度销售趋势",
-      "expected_output": "应该查询orders表数据，按月份分组统计销售金额，并展示趋势分析",
-      "files": []
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "列出所有已连接的数据库",
+      "expected_output": "应该返回所有数据库的列表，包括系统数据库和用户数据库",
+      "action": "list_databases",
+      "params": {}
     },
     {
       "id": 3,
-      "prompt": "创建一个预测模型来预测产品销量",
-      "expected_output": "应该使用MindsDB创建预测模型，选择合适的引擎和参数进行训练",
-      "files": []
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "查看warehouse_db数据库中的所有表",
+      "expected_output": "应该返回warehouse_db数据库中的所有表名列表",
+      "action": "show_tables",
+      "params": {
+        "database": "warehouse_db"
+      }
     },
     {
       "id": 4,
-      "prompt": "连接到Gmail并分析邮件数据",
-      "expected_output": "应该连接Gmail数据源，查询邮件数据并进行分析",
-      "files": []
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "查看odw_project表的结构",
+      "expected_output": "应该返回odw_project表的列名、数据类型等信息",
+      "action": "describe_table",
+      "params": {
+        "database": "warehouse_db",
+        "table": "odw_project"
+      }
     },
     {
       "id": 5,
-      "prompt": "查询MongoDB中用户数据，找出活跃用户",
-      "expected_output": "应该连接MongoDB，查询用户集合，筛选活跃用户并返回结果",
-      "files": []
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "执行SQL查询：SELECT * FROM odw_project LIMIT 5",
+      "expected_output": "应该返回odw_project表的前5行数据",
+      "action": "execute_sql",
+      "params": {
+        "sql": "SELECT * FROM warehouse_db.odw_project LIMIT 5"
+      }
     },
     {
       "id": 6,
-      "prompt": "创建一个技术文档知识库，用于智能问答",
-      "expected_output": "应该创建RAG数据库，配置嵌入模型，导入技术文档，并创建智能Agent",
-      "files": []
+      "module": "workflow_rag_build",
+      "workflow": "rag_build",
+      "prompt": "创建一个名为weekly_report_kb的RAG知识库",
+      "expected_output": "应该初始化本地RAG系统，创建知识库，并返回创建成功的响应",
+      "action": "create_kb",
+      "params": {
+        "kb_name": "weekly_report_kb",
+        "database": "warehouse_db"
+      }
     },
     {
       "id": 7,
-      "prompt": "根据技术文档回答设备报错0xE1怎么处理",
-      "expected_output": "应该使用Agent查询知识库，检索相关文档，并生成准确的回答",
-      "files": []
+      "module": "workflow_rag_build",
+      "workflow": "rag_build",
+      "prompt": "列出所有已创建的RAG知识库",
+      "expected_output": "应该返回所有知识库的列表和状态信息",
+      "action": "list_kb",
+      "params": {}
     },
     {
       "id": 8,
-      "prompt": "将PDF文档导入到知识库中",
-      "expected_output": "应该创建PDF数据源，提取文本内容，并导入到RAG知识库中",
-      "files": []
+      "module": "workflow_rag_build",
+      "workflow": "rag_build",
+      "prompt": "获取数据字典的摘要信息",
+      "expected_output": "应该返回数据字典的统计信息，包括表数量、列数量等",
+      "action": "get_data_dict_summary",
+      "params": {}
     },
     {
       "id": 9,
-      "prompt": "部署模型到生产环境并配置监控",
-      "expected_output": "应该部署模型，配置性能监控、数据漂移检测和告警规则",
-      "files": []
+      "module": "workflow_rag_build",
+      "workflow": "rag_build",
+      "prompt": "在数据字典中搜索'项目'相关的元数据",
+      "expected_output": "应该返回包含'项目'关键词的表和列的元数据信息",
+      "action": "search_data_dict",
+      "params": {
+        "keyword": "项目"
+      }
     },
     {
       "id": 10,
-      "prompt": "创建A/B测试来比较两个模型的性能",
-      "expected_output": "应该创建A/B测试配置，分配流量，监控指标并选择获胜模型",
-      "files": []
+      "module": "workflow_rag_build",
+      "workflow": "rag_build",
+      "prompt": "刷新warehouse_db数据库的数据字典",
+      "expected_output": "应该从数据库重新提取元数据并更新数据字典",
+      "action": "refresh_data_dict",
+      "params": {
+        "database": "warehouse_db"
+      }
     },
     {
       "id": 11,
-      "prompt": "将模型训练过程记录到MLflow",
-      "expected_output": "应该配置MLflow集成，记录训练参数、指标和模型版本",
-      "files": []
+      "module": "workflow_rag_analysis",
+      "workflow": "rag_analysis",
+      "prompt": "使用自然语言查询：查询所有项目的状态",
+      "expected_output": "应该将自然语言转换为SQL并执行查询，返回项目状态数据",
+      "action": "nl_query",
+      "params": {
+        "database": "warehouse_db",
+        "nl_text": "查询所有项目的状态"
+      }
     },
     {
       "id": 12,
-      "prompt": "分析销售数据，自动发现增长趋势和异常",
-      "expected_output": "应该执行自动数据探索，识别趋势模式，检测异常值，并生成洞察报告",
-      "files": []
+      "module": "workflow_rag_analysis",
+      "workflow": "rag_analysis",
+      "prompt": "执行SQL查询获取部门项目统计",
+      "expected_output": "应该执行SQL查询并返回结果",
+      "action": "exec_sql",
+      "params": {
+        "database": "warehouse_db",
+        "sql": "SELECT department_id, COUNT(*) as project_count FROM odw_project GROUP BY department_id"
+      }
     },
     {
       "id": 13,
-      "prompt": "预测下季度的销售额并生成预测报告",
-      "expected_output": "应该创建时间序列预测模型，训练模型，生成预测结果和置信区间",
-      "files": []
+      "module": "workflow_rag_analysis",
+      "workflow": "rag_analysis",
+      "prompt": "分析项目数据，找出进度最慢的项目",
+      "expected_output": "应该使用AI分析数据，识别进度最慢的项目并提供洞察",
+      "action": "analyze_data",
+      "params": {
+        "database": "warehouse_db",
+        "nl_text": "分析项目数据，找出进度最慢的项目"
+      }
     },
     {
       "id": 14,
-      "prompt": "为客户推荐可能感兴趣的产品",
-      "expected_output": "应该创建推荐模型，分析用户行为，生成个性化推荐列表",
-      "files": []
+      "module": "workflow_rag_analysis",
+      "workflow": "rag_analysis",
+      "prompt": "查询知识库：项目进度如何",
+      "expected_output": "应该使用RAG检索相关知识并返回答案",
+      "action": "query_kb",
+      "params": {
+        "kb_name": "weekly_report_kb",
+        "nl_text": "项目进度如何"
+      }
     },
     {
       "id": 15,
-      "prompt": "检测交易数据中的异常行为",
-      "expected_output": "应该创建异常检测模型，识别异常交易，并提供异常分析报告",
-      "files": []
+      "module": "workflow_rag_analysis",
+      "workflow": "rag_analysis",
+      "prompt": "创建一个预测模型来预测项目完成时间",
+      "expected_output": "应该使用MindsDB创建预测模型",
+      "action": "create_model",
+      "params": {
+        "model_name": "project_completion_predictor",
+        "predict_field": "completion_date",
+        "database": "warehouse_db"
+      }
     },
     {
       "id": 16,
-      "prompt": "连接到TDengine数据库获取工业设备的运行情况",
-      "expected_output": "应该连接TDengine时序数据库，查询水质数据（流量、pH值、温度、压力等）和设备运行状态，返回实时运行报告",
-      "files": []
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "连接到MySQL数据库",
+      "expected_output": "应该成功连接到MySQL数据库",
+      "action": "connect_db",
+      "params": {
+        "db_type": "mysql",
+        "host": "localhost",
+        "port": 3306,
+        "username": "root",
+        "password": "password",
+        "database": "mysql_db"
+      }
     },
     {
       "id": 17,
-      "prompt": "查询1号工业设备过去24小时的进水流量和温度浓度",
-      "expected_output": "应该执行SQL查询，从TDengine数据库获取plant_001的水质数据，包括流量和温度值，并展示趋势",
-      "files": []
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "连接到TDengine时序数据库获取工业设备数据",
+      "expected_output": "应该成功连接到TDengine数据库",
+      "action": "connect_db",
+      "params": {
+        "db_type": "tdengine",
+        "host": "localhost",
+        "port": 6030,
+        "username": "root",
+        "password": "taosdata",
+        "database": "tdengine_db"
+      }
     },
     {
       "id": 18,
-      "prompt": "检查工业设备所有设备的运行状态，找出异常设备",
-      "expected_output": "应该查询设备状态表，筛选alarm_status不为normal的设备，分析异常原因并提供维护建议",
-      "files": []
+      "module": "workflow_rag_build",
+      "workflow": "rag_build",
+      "prompt": "删除weekly_report_kb知识库",
+      "expected_output": "应该删除指定的知识库",
+      "action": "delete_kb",
+      "params": {
+        "kb_name": "weekly_report_kb",
+        "database": "warehouse_db"
+      }
     },
     {
       "id": 19,
-      "prompt": "创建设备故障预测模型，提前预警工业设备设备故障",
-      "expected_output": "应该使用历史设备数据创建分类模型，预测设备故障概率，并提供维护优先级建议",
-      "files": []
+      "module": "workflow_rag_analysis",
+      "workflow": "rag_analysis",
+      "prompt": "查询知识库：谁参与了供应链优化项目",
+      "expected_output": "应该检索知识库并返回参与人员信息",
+      "action": "query_kb",
+      "params": {
+        "kb_name": "weekly_report_kb",
+        "nl_text": "谁参与了供应链优化项目"
+      }
     },
     {
       "id": 20,
-      "prompt": "检测工业设备水质指标异常（温度超过500或pH值不在6-9范围内）",
-      "expected_output": "应该查询水质数据，识别超标记录，标注异常类型（温度超标或pH异常），并提供处理建议",
-      "files": []
+      "module": "workflow_rag_analysis",
+      "workflow": "rag_analysis",
+      "prompt": "分析周报数据，找出最常见的问题类型",
+      "expected_output": "应该分析周报内容，识别最常见的问题类型",
+      "action": "analyze_data",
+      "params": {
+        "database": "warehouse_db",
+        "nl_text": "分析周报数据，找出最常见的问题类型"
+      }
     }
   ]
 }

@@ -1,12 +1,40 @@
-# MindsDB MCP Skill
+# MindsDB MCP Skill v2.0
 
 ## 项目简介 | Project Introduction
 
-基于MindsDB MCP接口开发的Python技能包，核心支持RAG知识库全流程操作，同时兼容200+企业级数据源的自然语言交互、SQL执行、模型训练等功能，可直接集成到Agent系统，实现数据源与RAG知识库的一站式管理。
+基于MindsDB MCP接口开发的Python技能包，采用**三模块架构**设计，支持RAG知识库全流程操作、NLP2SQL自然语言查询、智能数据分析等功能，可直接集成到Agent系统，实现数据源与RAG知识库的一站式管理。
 
 **核心价值**：任意 Agent（包括 AI IDE）可通过本技能实现 NLP2SQL 能力，无需在 MindsDB EDIT 内定义 Agent+RAG，通过外部 Agent+SKILL+MindsDB 的组合方式，大大提升效率和通用性。
 
 **Core Value**: Any Agent (including AI IDE) can implement NLP2SQL capabilities through this skill, without defining Agent+RAG within MindsDB EDIT. The combination of external Agent+SKILL+MindsDB greatly improves efficiency and versatility.
+
+## 架构设计 | Architecture Design
+
+本技能采用**三模块架构**，职责分离清晰，便于维护和扩展：
+
+### 模块1：db_connector（公共数据库连接模块）
+- **职责**：统一管理数据库连接，封装MCP请求
+- **功能**：
+  - MindsDB服务自动检测、安装和启动
+  - 数据库连接管理（DuckDB、MySQL、TDengine等）
+  - 统一MCP请求发送和响应处理
+  - 连接信息缓存
+
+### 模块2：workflow_rag_build（本地RAG构建与管理工作流）
+- **职责**：构建和维护本地RAG知识库
+- **功能**：
+  - 本地RAG系统初始化（ChromaDB + all-MiniLM-L6-v2）
+  - 知识库管理（创建、列表、删除）
+  - 数据字典管理（获取、搜索、刷新）
+  - 数据持久化管理
+
+### 模块3：workflow_rag_analysis（基于RAG的NLP2SQL和数据分析工作流）
+- **职责**：利用RAG进行智能数据分析和查询
+- **功能**：
+  - 自然语言到SQL转换（NLP2SQL）
+  - 智能数据分析
+  - 知识库智能问答
+  - AI模型创建与预测
 
 ## 一、功能概述 | I. Function Overview
 
@@ -22,8 +50,11 @@ This skill package is centered around RAG (Retrieval-Augmented Generation), enca
 - **本地RAG备用方案**：当MindsDB未配置embedding model时，自动切换到本地RAG系统（ChromaDB + all-MiniLM-L6-v2），优先从国内源下载模型，确保RAG功能始终可用。
   **Local RAG Alternative**: When MindsDB embedding model is not configured, automatically switch to local RAG system (ChromaDB + all-MiniLM-L6-v2), prioritize downloading models from domestic sources to ensure RAG functionality is always available.
 
-- **数据源管理**：连接多类型数据源（MySQL、CSV、Excel等）、列出所有数据源、查看数据表结构。
-  **Data Source Management**: Connect multiple types of data sources (MySQL, CSV, Excel, etc.), list all data sources, view data table structures.
+- **数据源管理**：连接多类型数据源（MySQL、DuckDB、TDengine等）、列出所有数据源、查看数据表结构。
+  **Data Source Management**: Connect multiple types of data sources (MySQL, DuckDB, TDengine, etc.), list all data sources, view data table structures.
+
+- **NLP2SQL自然语言查询**：将自然语言自动转换为SQL语句并执行，无需用户编写SQL。
+  **NLP2SQL Natural Language Query**: Automatically convert natural language to SQL statements and execute, no need for users to write SQL.
 
 - **数据交互**：自然语言查询数据、执行自定义SQL、数据智能分析。
   **Data Interaction**: Natural language data query, execute custom SQL, intelligent data analysis.
@@ -100,48 +131,96 @@ set MINDSDB_PASSWORD=password123
 ```
 mindsdb-mcp-skill/
 ├── scripts/
-│   ├── data_dictionary.py  # 数据字典实现
-│   └── mindsdb_skill.py  # 核心技能代码（包含RAG全流程实现）
+│   ├── db_connector.py           # 公共数据库连接模块（新增）
+│   ├── workflow_rag_build.py     # 工作流1：本地RAG构建与管理（新增）
+│   ├── workflow_rag_analysis.py  # 工作流2：基于RAG的NLP2SQL和数据分析（新增）
+│   ├── data_dictionary.py        # 数据字典实现
+│   └── mindsdb_skill.py          # 原核心技能代码（保留兼容）
 ├── evals/
-│   └── evals.json        # 测试用例
-├── references/
-│   ├── knowledge-base.md  # 知识库构建指南
-│   └── ...
-├── README.md             # 说明文档
-├── SKILL.md              # 技能定义文件
-└── mcp.json              # MCP配置文件
+│   └── evals.json                # 测试用例（已更新为三模块架构）
+├── data/
+│   ├── chromadb_persist/         # RAG向量数据持久化目录
+│   └── data_dictionary.json      # 数据字典持久化文件
+├── references/                   # 参考文档
+├── README.md                     # 说明文档
+├── SKILL.md                      # 技能定义文件
+└── mcp.json                      # MCP配置文件
 ```
 
 ### 3.2 基础调用示例 | 3.2 Basic Call Examples
 
-导入技能包，通过入口函数mindsdb_skill_entry()调用各类功能，传入参数字典即可获取标准化返回结果。
-
-Import the skill package and call various functions through the entry function mindsdb_skill_entry(), passing in a parameter dictionary to get standardized return results.
-
-#### 示例1：连接MySQL数据源 | Example 1: Connect to MySQL Data Source
+#### 方式1：使用公共数据库连接模块 | Method 1: Use Database Connector Module
 
 ```python
-from scripts.mindsdb_skill import mindsdb_skill_entry
+from scripts.db_connector import get_db_connector
 
-# 连接参数
-params = {
-    "action": "connect_db",
-    "db_type": "mysql",  # 数据源类型（支持所有MindsDB兼容类型）
-    "host": "localhost",
-    "port": 3306,
-    "username": "root",
-    "password": "123456"
-}
+# 获取数据库连接器
+db = get_db_connector()
 
-# 执行连接
-result = mindsdb_skill_entry(params)
+# 连接DuckDB数据库
+result = db.connect_database(
+    db_type="duckdb",
+    db_path="data/weekly_report_warehouse.duckdb",
+    database="warehouse_db"
+)
+print(result)
+
+# 执行SQL查询
+result = db.execute_sql("SELECT * FROM warehouse_db.odw_project LIMIT 5")
 print(result)
 ```
 
-#### 示例2：RAG知识库全流程测试（核心） | Example 2: RAG Knowledge Base Full Process Test (Core)
+#### 方式2：使用RAG构建工作流 | Method 2: Use RAG Build Workflow
 
 ```python
-from scripts.mindsdb_skill import mindsdb_skill_entry
+from scripts.workflow_rag_build import rag_build_workflow_entry
+
+# 创建RAG知识库
+params = {
+    "action": "create_kb",
+    "kb_name": "weekly_report_kb",
+    "database": "warehouse_db"
+}
+result = rag_build_workflow_entry(params)
+print(result)
+
+# 获取数据字典摘要
+params = {
+    "action": "get_data_dict_summary"
+}
+result = rag_build_workflow_entry(params)
+print(result)
+```
+
+#### 方式3：使用RAG分析工作流 | Method 3: Use RAG Analysis Workflow
+
+```python
+from scripts.workflow_rag_analysis import rag_analysis_workflow_entry
+
+# 自然语言查询（NLP2SQL）
+params = {
+    "action": "nl_query",
+    "database": "warehouse_db",
+    "nl_text": "查询所有项目的状态"
+}
+result = rag_analysis_workflow_entry(params)
+print(result)
+
+# 知识库智能问答
+params = {
+    "action": "query_kb",
+    "kb_name": "weekly_report_kb",
+    "nl_text": "项目进度如何"
+}
+result = rag_analysis_workflow_entry(params)
+print(result)
+```
+
+### 3.3 RAG知识库全流程测试（核心） | 3.3 RAG Knowledge Base Full Process Test (Core)
+
+```python
+from scripts.workflow_rag_build import rag_build_workflow_entry
+from scripts.workflow_rag_analysis import rag_analysis_workflow_entry
 import json
 
 # 基础配置（已连接MySQL数据源，数据源名称为mysql_db）
@@ -150,73 +229,65 @@ base_config = {
     "port": 47334,
     "username": "admin",
     "password": "password123",
-    "database": "mysql_db"
+    "database": "warehouse_db"
 }
 
-# 1. 创建RAG知识库（设置检索参数top_k=3，相关性阈值=0.6）
+# 1. 创建RAG知识库（工作流1）
 create_kb = {**base_config, "action": "create_kb", "kb_name": "test_rag_kb", "top_k": 3, "threshold": 0.6}
-create_result = mindsdb_skill_entry(create_kb)
+create_result = rag_build_workflow_entry(create_kb)
 print("创建知识库结果：", json.dumps(create_result, ensure_ascii=False, indent=2))
 
 # 2. 列出所有RAG知识库
 list_kb = {**base_config, "action": "list_kb"}
-list_result = mindsdb_skill_entry(list_kb)
+list_result = rag_build_workflow_entry(list_kb)
 print("所有知识库列表：", json.dumps(list_result, ensure_ascii=False, indent=2))
 
-# 3. 知识库智能问答（RAG核心功能）
+# 3. 知识库智能问答（工作流2）
 query_kb = {**base_config, "action": "query_kb", "kb_name": "test_rag_kb", "nl_text": "查询数据源中的核心数据信息", "top_k": 3}
-query_result = mindsdb_skill_entry(query_kb)
+query_result = rag_analysis_workflow_entry(query_kb)
 print("问答结果：", json.dumps(query_result, ensure_ascii=False, indent=2))
 
 # 4. 删除RAG知识库
 delete_kb = {**base_config, "action": "delete_kb", "kb_name": "test_rag_kb"}
-delete_result = mindsdb_skill_entry(delete_kb)
+delete_result = rag_build_workflow_entry(delete_kb)
 print("删除知识库结果：", json.dumps(delete_result, ensure_ascii=False, indent=2))
 ```
 
 ## 四、核心功能详细说明 | IV. Detailed Core Function Description
 
-### 4.1 RAG知识库操作（核心） | 4.1 RAG Knowledge Base Operations (Core)
+### 4.1 模块1：db_connector（公共数据库连接模块） | 4.1 Module 1: db_connector (Database Connector)
 
-RAG相关操作是本技能包的核心，支持创建、查询、删除、列表全流程，所有操作均通过MCP接口与MindsDB交互，自动完成数据向量化、检索匹配等底层逻辑。当MindsDB未配置embedding model时，技能会自动切换到本地RAG系统（ChromaDB + all-MiniLM-L6-v2）。
+| 方法 | 必传参数 | 功能说明 |
+|------|---------|----------|
+| connect_database | db_type | 连接指定类型的数据源（DuckDB、MySQL、TDengine等） |
+| list_databases | 无 | 列出所有已连接的数据源 |
+| show_tables | database | 查看指定数据库的所有表 |
+| describe_table | database, table | 查看指定表的结构 |
+| execute_sql | sql | 执行自定义SQL语句 |
 
-RAG-related operations are the core of this skill package, supporting the full process of creation, querying, deletion, and listing. All operations interact with MindsDB through the MCP interface, automatically completing underlying logic such as data vectorization and retrieval matching. When MindsDB embedding model is not configured, the skill will automatically switch to the local RAG system (ChromaDB + all-MiniLM-L6-v2).
+### 4.2 模块2：workflow_rag_build（RAG构建工作流） | 4.2 Module 2: workflow_rag_build (RAG Build Workflow)
 
 | 动作（action） | 必传参数 | 可选参数 | 功能说明 |
 |---------------|---------|---------|----------|
-| create_kb | database、kb_name | top_k、threshold | 创建RAG知识库，关联指定数据源，可配置检索返回数量和相关性阈值 |
-| query_kb | database、kb_name、nl_text | top_k、threshold | 向指定知识库发送自然语言查询，返回相关性匹配的结果 |
-| delete_kb | kb_name | 无 | 删除指定名称的RAG知识库 |
+| create_kb | kb_name | database, top_k, threshold | 创建RAG知识库，自动提取数据库元数据 |
 | list_kb | 无 | 无 | 列出所有已创建的RAG知识库 |
+| delete_kb | kb_name | 无 | 删除指定名称的RAG知识库 |
+| get_data_dict_summary | 无 | 无 | 获取数据字典摘要信息 |
+| search_data_dict | keyword | 无 | 搜索数据字典中的元数据 |
+| refresh_data_dict | database | 无 | 刷新指定数据库的数据字典 |
 
-| Action | Required Parameters | Optional Parameters | Function Description |
-|--------|-------------------|-------------------|---------------------|
-| create_kb | database, kb_name | top_k, threshold | Create RAG knowledge base, associate with specified data source, configurable retrieval return quantity and relevance threshold |
-| query_kb | database, kb_name, nl_text | top_k, threshold | Send natural language query to specified knowledge base, return relevance-matched results |
-| delete_kb | kb_name | None | Delete RAG knowledge base with specified name |
-| list_kb | None | None | List all created RAG knowledge bases |
+### 4.3 模块3：workflow_rag_analysis（RAG分析工作流） | 4.3 Module 3: workflow_rag_analysis (RAG Analysis Workflow)
 
-### 4.2 其他常用操作 | 4.2 Other Common Operations
-
-| 动作（action） | 必传参数 | 功能说明 |
-|---------------|---------|----------|
-| connect_db | db_type | 连接指定类型的数据源，支持MySQL、PostgreSQL、CSV等200+类型 |
-| list_databases | 无 | 列出所有已连接的数据源 |
-| show_table_schema | database | 查看指定数据源的所有数据表结构 |
-| nl_query | database、nl_text | 通过自然语言查询指定数据源的数据，无需编写SQL |
-| exec_sql | database、sql | 执行自定义SQL语句，操作指定数据源 |
-| create_model | model_name、predict_field | 基于指定数据源创建预测模型，指定预测字段 |
-| analyze_data | database、nl_text | 对指定数据源进行自然语言驱动的数据分析 |
-
-| Action | Required Parameters | Function Description |
-|--------|-------------------|---------------------|
-| connect_db | db_type | Connect to specified type of data source, supporting MySQL, PostgreSQL, CSV, etc. (200+ types) |
-| list_databases | None | List all connected data sources |
-| show_table_schema | database | View all data table structures of specified data source |
-| nl_query | database, nl_text | Query data from specified data source through natural language, no need to write SQL |
-| exec_sql | database, sql | Execute custom SQL statements to operate specified data source |
-| create_model | model_name, predict_field | Create prediction model based on specified data source, specify prediction field |
-| analyze_data | database, nl_text | Perform natural language-driven data analysis on specified data source |
+| 动作（action） | 必传参数 | 可选参数 | 功能说明 |
+|---------------|---------|---------|----------|
+| connect_db | db_type | host, port, username, password, database | 连接指定类型的数据源 |
+| list_databases | 无 | 无 | 列出所有已连接的数据源 |
+| show_table_schema | database | 无 | 查看指定数据源的所有数据表结构 |
+| nl_query | database, nl_text | 无 | 通过自然语言查询数据（NLP2SQL） |
+| exec_sql | database, sql | 无 | 执行自定义SQL语句 |
+| analyze_data | database, nl_text | 无 | 对数据进行自然语言驱动的智能分析 |
+| query_kb | kb_name, nl_text | top_k, threshold | 向知识库发送自然语言查询 |
+| create_model | model_name, predict_field | database | 创建AI预测模型 |
 
 ## 五、返回格式说明 | V. Return Format Description
 
@@ -234,37 +305,43 @@ All operation return results are in a unified JSON format for easy Agent parsing
 
 ### 状态码说明 | Status Code Description
 
-- 0：操作成功
+- **0**：操作成功
   0: Operation successful
 
-- -1：缺失必传参数action
+- **-1**：缺失必传参数action
   -1: Missing required parameter action
 
-- -2：不支持的action
+- **-2**：不支持的action
   -2: Unsupported action
 
-- -3：缺失当前action的必传参数
+- **-3**：缺失当前action的必传参数
   -3: Missing required parameters for current action
 
-- -4：MCP接口请求失败（RAG操作会补充专属错误提示）
+- **-4**：MCP接口请求失败（RAG操作会补充专属错误提示）
   -4: MCP interface request failed (RAG operations will add specific error prompts)
 
-- -5：MindsDB连接超时
+- **-5**：MindsDB连接超时
   -5: MindsDB connection timeout
 
-- -6：MindsDB服务不可达
+- **-6**：MindsDB服务不可达
   -6: MindsDB service unreachable
 
-- -7：HTTP请求异常
+- **-7**：HTTP请求异常
   -7: HTTP request exception
 
-- -8：未知异常（RAG相关异常会补充专属提示）
+- **-8**：未知异常（RAG相关异常会补充专属提示）
   -8: Unknown exception (RAG-related exceptions will add specific prompts)
+
+- **-9**：MindsDB服务未就绪
+  -9: MindsDB service not ready
+
+- **-10**：本地RAG初始化失败
+  -10: Local RAG initialization failed
 
 ## 六、注意事项 | VI. Notes
 
-- 创建RAG知识库（create_kb）前，必须先通过connect_db连接数据源，否则会报错。
-  Before creating a RAG knowledge base (create_kb), you must first connect to the data source through connect_db, otherwise an error will be reported.
+- 创建RAG知识库（create_kb）前，建议先通过db_connector或workflow_rag_analysis连接数据源。
+  Before creating a RAG knowledge base (create_kb), it is recommended to first connect to the data source through db_connector or workflow_rag_analysis.
 
 - RAG知识库的名称（kb_name）需唯一，重复创建会返回错误。
   The name of the RAG knowledge base (kb_name) must be unique; duplicate creation will return an error.
@@ -275,59 +352,38 @@ All operation return results are in a unified JSON format for easy Agent parsing
 - **本地RAG注意事项**：
   - 首次使用本地RAG时会自动从国内源（https://hf-mirror.com）下载all-MiniLM-L6-v2模型（约80MB），解决网络问题
   - 当模型下载失败时，会自动使用基于TF-IDF的检索作为降级方案
-  - 本地RAG默认使用内存存储，重启后数据会丢失（可配置持久化）
-  - 本地RAG的性能取决于硬件，但对于一般场景足够使用
+  - 本地RAG使用ChromaDB持久化存储，数据保存在`data/chromadb_persist`目录
+  - 数据字典自动持久化到`data/data_dictionary.json`文件
   
   **Local RAG Notes**:
   - The first time you use local RAG, it will automatically download the all-MiniLM-L6-v2 model (about 80MB) from domestic sources (https://hf-mirror.com) to solve network issues
   - When model download fails, it will automatically use TF-IDF-based retrieval as a fallback solution
-  - Local RAG uses memory storage by default, and data will be lost after restart (persistence can be configured)
-  - The performance of local RAG depends on hardware, but it is sufficient for general scenarios
+  - Local RAG uses ChromaDB persistent storage, data is saved in the `data/chromadb_persist` directory
+  - Data dictionary is automatically persisted to the `data/data_dictionary.json` file
 
-- 测试代码位于mindsdb_skill.py末尾，可直接运行，需提前修改base_config中的数据源信息。
-  The test code is located at the end of mindsdb_skill.py and can be run directly, but you need to modify the data source information in base_config in advance.
+- 测试代码位于各模块文件末尾，可直接运行，需提前修改配置中的数据源信息。
+  The test code is located at the end of each module file and can be run directly, but you need to modify the data source information in the configuration in advance.
 
 - 若MindsDB服务部署在远程服务器，需修改host参数为远程IP，并确保端口可访问。
   If the MindsDB service is deployed on a remote server, you need to modify the host parameter to the remote IP and ensure the port is accessible.
 
 ## 七、扩展说明 | VII. Extension Instructions
 
-- 本技能包可直接集成到各类Agent系统，只需调用mindsdb_skill_entry()入口函数，传入符合要求的参数即可。
-  This skill package can be directly integrated into various Agent systems by simply calling the mindsdb_skill_entry() entry function and passing in the required parameters.
+- 本技能包可直接集成到各类Agent系统，调用各模块的入口函数即可：
+  - db_connector模块：`from scripts.db_connector import get_db_connector`
+  - RAG构建工作流：`from scripts.workflow_rag_build import rag_build_workflow_entry`
+  - RAG分析工作流：`from scripts.workflow_rag_analysis import rag_analysis_workflow_entry`
 
-- 支持扩展更多MCP接口操作，可在_generate_mcp_request()方法中添加新的action逻辑。
-  Supports extending more MCP interface operations; new action logic can be added in the _generate_mcp_request() method.
+- 支持扩展更多MCP接口操作，可在各模块中添加新的action逻辑。
+  Supports extending more MCP interface operations; new action logic can be added in each module.
 
-- RAG底层依赖MindsDB的知识库功能，若需自定义向量化模型，可在MindsDB中进行配置后，本技能包无需修改即可兼容。
-  RAG relies on MindsDB's knowledge base functionality at the bottom; if you need to customize the vectorization model, you can configure it in MindsDB, and this skill package will be compatible without modification.
+## 八、版本历史 | VIII. Version History
 
-## 参考资料 | VIII. Reference Materials
+- **v2.0.0** (2026-03-19)：重构为三模块架构（db_connector、workflow_rag_build、workflow_rag_analysis）
+  - 新增公共数据库连接模块db_connector
+  - 新增RAG构建工作流workflow_rag_build
+  - 新增RAG分析工作流workflow_rag_analysis
+  - 更新evals.json测试用例为三模块架构
+  - 保留原mindsdb_skill.py以兼容旧版本
 
-- **知识库构建指南**：references/knowledge-base.md - 详细的RAG知识库构建流程和示例
-  **Knowledge Base Construction Guide**: references/knowledge-base.md - Detailed RAG knowledge base construction process and examples
-
-- **工业设备监控案例**：references/industrial-monitoring-case.md - TDengine时序数据库实际应用案例
-  **Industrial Equipment Monitoring Case**: references/industrial-monitoring-case.md - TDengine time-series database practical application case
-
-- **数据源配置参考**：references/data-sources.md - 各种数据库连接配置示例
-  **Data Source Configuration Reference**: references/data-sources.md - Various database connection configuration examples
-
-- **智能分析指南**：references/intelligent-analysis.md - 数据分析方法和示例
-  **Intelligent Analysis Guide**: references/intelligent-analysis.md - Data analysis methods and examples
-
-- **MindsDB工具介绍**：references/mindsdb-tools.md - MindsDB工具使用指南
-  **MindsDB Tools Introduction**: references/mindsdb-tools.md - MindsDB tool usage guide
-
-- **MLOps高级指南**：references/mlops-advanced.md - 模型部署和监控最佳实践
-  **MLOps Advanced Guide**: references/mlops-advanced.md - Model deployment and monitoring best practices
-
-- **SDK和API参考**：references/sdk-api.md - MindsDB编程接口说明
-  **SDK and API Reference**: references/sdk-api.md - MindsDB programming interface description
-
-- **SQL示例集合**：references/sql-examples.md - 常见SQL查询和操作示例
-  **SQL Examples Collection**: references/sql-examples.md - Common SQL query and operation examples
-
-- **流处理管道指南**：references/streaming-pipelines.md - 实时数据处理示例
-  **Streaming Pipeline Guide**: references/streaming-pipelines.md - Real-time data processing examples
-
-- **MindsDB官方文档**：https://docs.mindsdb.com/  **MindsDB Official Documentation**: https://docs.mindsdb.com/
+- **v1.2.0**：原单模块架构版本
