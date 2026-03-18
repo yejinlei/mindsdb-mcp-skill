@@ -1,0 +1,14 @@
+{
+  "mcpVersion": "0.1",  // MCP 协议版本 | MCP Protocol Version
+  "name": "mindsdb-mcp-skill",  // Skill 名称（与核心源码一致）| Skill Name (Consistent with Core Source Code)
+  "version": "1.1.0",  // Skill 版本 | Skill Version
+  "description": "MindsDB MCP 服务器交互技能，支持通过自然语言查询和操作200+企业级数据源 | MindsDB MCP Server Interaction Skill, supporting natural language queries and operations on 200+ enterprise-level data sources",
+  "entry": "python",  // 执行入口语言 | Execution Entry Language
+  "args": ["scripts/mindsdb_skill.py"],  // 核心源码路径 | Core Source Code Path
+  "env": {
+    "MINDSDB_HOST": "localhost",  // MindsDB 主机地址（默认本地）| MindsDB Host Address (Local by Default)
+    "MINDSDB_PORT": "47334",  // MindsDB 默认端口 | MindsDB Default Port
+    "MINDSDB_USER": "admin",  // MindsDB 默认登录账号 | MindsDB Default Login Username
+    "MINDSDB_PWD": "password123"  // MindsDB 默认登录密码 | MindsDB Default Login Password
+  }
+}

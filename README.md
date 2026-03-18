@@ -1,533 +1,334 @@
 # MindsDB MCP Skill
 
-一个基于MindsDB MCP服务器的Claude技能，支持通过自然语言操作200+企业级数据源。
+## 项目简介 | Project Introduction
 
-A Claude skill based on MindsDB MCP server, supporting natural language operations on 200+ enterprise data sources.
+基于MindsDB MCP接口开发的Python技能包，核心支持RAG知识库全流程操作，同时兼容200+企业级数据源的自然语言交互、SQL执行、模型训练等功能，可直接集成到Agent系统，实现数据源与RAG知识库的一站式管理。
 
-## 架构说明 / Architecture Overview
+**核心价值**：任意 Agent（包括 AI IDE）可通过本技能实现 NLP2SQL 能力，无需在 MindsDB EDIT 内定义 Agent+RAG，通过外部 Agent+SKILL+MindsDB 的组合方式，大大提升效率和通用性。
 
-### 使用方式 / Usage Pattern
+**Core Value**: Any Agent (including AI IDE) can implement NLP2SQL capabilities through this skill, without defining Agent+RAG within MindsDB EDIT. The combination of external Agent+SKILL+MindsDB greatly improves efficiency and versatility.
 
-本技能采用 **Agent + MCP** 架构，与直接使用MindsDB有所不同：
+## 一、功能概述 | I. Function Overview
 
-This skill uses an **Agent + MCP** architecture, which differs from direct MindsDB usage:
+本技能包以RAG（检索增强生成）为核心，封装了MindsDB MCP接口的常用操作，提供标准化的调用入口和返回格式，降低MindsDB二次开发门槛，适用于需要快速集成RAG能力、对接多数据源的场景。
 
-**直接使用MindsDB / Direct MindsDB Usage:**
-```
-用户 → MindsDB GUI/SQL → 数据源/AI模型
-User → MindsDB GUI/SQL → Data Sources/AI Models
-```
+This skill package is centered around RAG (Retrieval-Augmented Generation), encapsulating common operations of the MindsDB MCP interface, providing standardized call entry points and return formats, reducing the threshold for MindsDB secondary development, and suitable for scenarios requiring rapid integration of RAG capabilities and connection to multiple data sources.
 
-**本技能方式 / This Skill's Approach:**
-```
-用户（自然语言）→ Claude Agent → MindsDB MCP Server → 数据源/AI模型
-User (Natural Language) → Claude Agent → MindsDB MCP Server → Data Sources/AI Models
-```
+### 核心功能 | Core Functions
 
-### 核心优势 / Key Advantages
+- **RAG知识库全流程**：创建知识库、知识库智能问答、删除知识库、列出所有知识库，支持检索参数（top_k、相关性阈值）自定义。
+  **RAG Knowledge Base Full Process**: Create knowledge base, intelligent Q&A with knowledge base, delete knowledge base, list all knowledge bases, support custom retrieval parameters (top_k, relevance threshold).
 
-| 特性 / Feature | 直接使用MindsDB / Direct Usage | 本技能 / This Skill |
-|--------------|---------------------------|-------------------|
-| 交互方式 / Interaction | SQL语句 / SQL statements | 自然语言 / Natural language |
-| 技能要求 / Skill Required | 需要SQL知识 / SQL knowledge required | 无需SQL / No SQL needed |
-| 学习曲线 / Learning Curve | 较陡 / Steep | 平缓 / Gentle |
-| 自动化程度 / Automation Level | 手动 / Manual | 自动 / Automatic |
-| 适用人群 / Target Users | 技术人员 / Technical users | 所有人 / Everyone |
+- **本地RAG备用方案**：当MindsDB未配置embedding model时，自动切换到本地RAG系统（ChromaDB + all-MiniLM-L6-v2），优先从国内源下载模型，确保RAG功能始终可用。
+  **Local RAG Alternative**: When MindsDB embedding model is not configured, automatically switch to local RAG system (ChromaDB + all-MiniLM-L6-v2), prioritize downloading models from domestic sources to ensure RAG functionality is always available.
 
-### 示例对比 / Example Comparison
+- **数据源管理**：连接多类型数据源（MySQL、CSV、Excel等）、列出所有数据源、查看数据表结构。
+  **Data Source Management**: Connect multiple types of data sources (MySQL, CSV, Excel, etc.), list all data sources, view data table structures.
 
-**传统方式 / Traditional Approach:**
-```sql
--- 需要手动编写SQL / Need to write SQL manually
-CREATE DATABASE my_postgres 
-WITH ENGINE = 'postgres',
-PARAMETERS = {"host": "127.0.0.1", "port": 5432, ...};
+- **数据交互**：自然语言查询数据、执行自定义SQL、数据智能分析。
+  **Data Interaction**: Natural language data query, execute custom SQL, intelligent data analysis.
 
-CREATE MODEL churn_predictor
-FROM my_postgres(SELECT * FROM customers)
-PREDICT churn;
+- **模型训练**：基于数据源创建预测模型，支持指定预测字段。
+  **Model Training**: Create prediction models based on data sources, support specifying prediction fields.
 
-SELECT * FROM churn_predictor WHERE customer_id = 123;
-```
+- **异常处理**：完善的参数校验和异常捕获，提供RAG专属错误提示，便于调试。
+  **Exception Handling**: Comprehensive parameter validation and exception capture, providing RAG-specific error prompts for easy debugging.
 
-**本技能方式 / This Skill's Approach:**
-```
-用户: "连接到Postgres数据库，预测客户123是否会流失"
-User: "Connect to Postgres database, predict if customer 123 will churn"
+## 二、环境准备 | II. Environment Preparation
 
-Agent自动完成 / Agent automatically:
-1. 连接数据库 / Connect to database
-2. 创建预测模型 / Create prediction model
-3. 执行预测 / Execute prediction
-4. 返回结果和解释 / Return results with explanation
-```
+### 2.1 依赖安装 | 2.1 Dependency Installation
 
-### 技术架构 / Technical Architecture
+安装技能包所需依赖，执行以下命令：
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  用户 / User                                             │
-│  (自然语言交互 / Natural Language Interaction)           │
-└────────────────────┬────────────────────────────────────┘
-                     ↓
-┌─────────────────────────────────────────────────────────┐
-│  Claude Agent                                           │
-│  (理解意图、生成SQL、执行任务 /                          │
-│   Understand intent, generate SQL, execute tasks)       │
-└────────────────────┬────────────────────────────────────┘
-                     ↓ (MCP Protocol)
-┌─────────────────────────────────────────────────────────┐
-│  MindsDB MCP Server                                     │
-│  (MCP协议接口 / MCP Protocol Interface)                 │
-└────────────────────┬────────────────────────────────────┘
-                     ↓ (SQL/API)
-┌─────────────────────────────────────────────────────────┐
-│  MindsDB Server                                         │
-│  (核心引擎 / Core Engine)                               │
-└────────────────────┬────────────────────────────────────┘
-                     ↓ (Connectors)
-┌─────────────────────────────────────────────────────────┐
-│  数据源 / Data Sources                                  │
-│  MySQL • PostgreSQL • MongoDB • Files • SaaS • ...     │
-└─────────────────────────────────────────────────────────┘
-```
-
-### 适用场景 / Use Cases
-
-**✅ 适合使用本技能的场景 / Scenarios Suitable for This Skill:**
-
-1. **非技术人员 / Non-technical Users**
-   - 产品经理需要查询数据 / Product managers need to query data
-   - 业务分析师进行数据分析 / Business analysts perform data analysis
-   - 运营人员生成报表 / Operations staff generate reports
-
-2. **快速原型开发 / Rapid Prototyping**
-   - 快速验证数据假设 / Quickly validate data hypotheses
-   - 探索性数据分析 / Exploratory data analysis
-   - MVP开发 / MVP development
-
-3. **自动化工作流 / Automated Workflows**
-   - 定期数据报告 / Regular data reports
-   - 自动化预测任务 / Automated prediction tasks
-   - 智能告警系统 / Intelligent alerting systems
-
-**⚠️ 可选直接使用MindsDB的场景 / Scenarios for Direct MindsDB Usage:**
-
-1. **高级SQL需求 / Advanced SQL Requirements**
-   - 复杂的SQL优化 / Complex SQL optimization
-   - 精细的查询控制 / Fine-grained query control
-   - 性能调优 / Performance tuning
-
-2. **批量操作 / Batch Operations**
-   - 大规模数据迁移 / Large-scale data migration
-   - 批量模型训练 / Batch model training
-   - 系统管理任务 / System administration tasks
-
-## 功能特性
-
-- 🔌 **多数据源支持**: 连接MySQL、PostgreSQL、MongoDB、Excel、CSV、Gmail、Slack等200+数据源
-- 🤖 **AI模型创建**: 使用MindsDB创建预测和分类模型
-- 💬 **自然语言查询**: 将自然语言转换为SQL查询
-- 📊 **数据分析**: 执行复杂的数据分析和聚合操作
-- 🧠 **知识库构建（RAG）**: 构建智能知识库，支持文档检索和智能问答
-- 🔍 **智能问答Agent**: 基于知识库的AI问答系统
-- 🚀 **MLOps功能**: 模型部署、监控、版本管理、A/B测试
-- 🔄 **CI/CD集成**: 支持MLflow、dbt、Airflow等工具集成
-- 🌊 **实时流处理**: 支持Kafka、Kinesis、RabbitMQ等实时数据处理
-- 📈 **数据管道**: 完整的ETL/ELT数据管道和事件驱动架构
-- 🔒 **安全可靠**: 支持参数化查询和权限管理
-
-## 安装步骤
-
-### 1. 安装MindsDB MCP服务器
+Install the dependencies required for the skill package by executing the following command:
 
 ```bash
-# 使用npm安装
-npm install -g @mindsdb/mcp-server
-
-# 或使用npx直接运行
-npx @mindsdb/mcp-server
+pip install requests
 ```
 
-### 2. 配置Claude Desktop
+**本地RAG依赖**：当MindsDB RAG不可用时，技能会自动安装以下依赖：
+- chromadb：轻量级向量数据库
+- sentence-transformers：提供all-MiniLM-L6-v2嵌入模型
 
-编辑Claude Desktop配置文件：
+**Local RAG Dependencies**: When MindsDB RAG is unavailable, the skill will automatically install the following dependencies:
+- chromadb: Lightweight vector database
+- sentence-transformers: Provides all-MiniLM-L6-v2 embedding model
 
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Linux**: `~/.config/Claude/claude_desktop_config.json`
+### 2.2 MindsDB环境要求 | 2.2 MindsDB Environment Requirements
 
-添加以下配置：
+- **自动安装和启动**：本技能包支持自动检测、安装和启动MindsDB服务，无需手动操作。当您首次使用技能时，它会：
+  1. 检查MindsDB是否已安装
+  2. 如果未安装，自动执行 `pip install mindsdb`
+  3. 启动MindsDB服务（默认端口47334）
+  4. 验证服务是否正常运行
 
-```json
-{
-  "mcpServers": {
-    "mindsdb": {
-      "command": "node",
-      "args": [
-        "/path/to/mindsdb-mcp-server/dist/index.js"
-      ],
-      "env": {
-        "MINDSDB_API_KEY": "your-api-key",
-        "MINDSDB_HOST": "localhost",
-        "MINDSDB_PORT": "47334"
-      }
-    }
-  }
+- **手动安装选项**：如果您希望手动安装和配置MindsDB，可以：
+  1. 执行 `pip install mindsdb` 安装MindsDB
+  2. 执行 `python -m mindsdb` 启动MindsDB服务
+  3. 确保服务在默认端口47334上运行
+
+- MindsDB版本：建议v23.10及以上（支持MCP接口和RAG知识库功能）。
+  MindsDB version: v23.10 or above is recommended (supports MCP interface and RAG knowledge base functionality).
+
+- 确保MindsDB服务可正常访问（本地部署默认地址：http://localhost:47334）。
+  Ensure the MindsDB service is accessible (default local deployment address: http://localhost:47334).
+
+### 2.3 环境变量配置（可选） | 2.3 Environment Variable Configuration (Optional)
+
+可通过环境变量配置MindsDB连接信息，优先级高于代码默认值，避免硬编码敏感信息：
+
+You can configure MindsDB connection information through environment variables, which have higher priority than default values in code to avoid hardcoding sensitive information:
+
+```bash
+# Linux/Mac
+export MINDSDB_HOST=localhost
+export MINDSDB_PORT=47334
+export MINDSDB_USERNAME=admin
+export MINDSDB_PASSWORD=password123
+```
+
+```bash
+# Windows（命令行）
+set MINDSDB_HOST=localhost
+set MINDSDB_PORT=47334
+set MINDSDB_USERNAME=admin
+set MINDSDB_PASSWORD=password123
+```
+
+## 三、快速开始 | III. Quick Start
+
+### 3.1 项目结构 | 3.1 Project Structure
+
+```
+mindsdb-mcp-skill/
+├── scripts/
+│   └── mindsdb_skill.py  # 核心技能代码（包含RAG全流程实现）
+├── evals/
+│   └── evals.json        # 测试用例
+├── references/
+│   ├── knowledge-base.md  # 知识库构建指南
+│   └── ...
+├── README.md             # 说明文档
+├── SKILL.md              # 技能定义文件
+└── mcp.json              # MCP配置文件
+```
+
+### 3.2 基础调用示例 | 3.2 Basic Call Examples
+
+导入技能包，通过入口函数mindsdb_skill_entry()调用各类功能，传入参数字典即可获取标准化返回结果。
+
+Import the skill package and call various functions through the entry function mindsdb_skill_entry(), passing in a parameter dictionary to get standardized return results.
+
+#### 示例1：连接MySQL数据源 | Example 1: Connect to MySQL Data Source
+
+```python
+from scripts.mindsdb_skill import mindsdb_skill_entry
+
+# 连接参数
+params = {
+    "action": "connect_db",
+    "db_type": "mysql",  # 数据源类型（支持所有MindsDB兼容类型）
+    "host": "localhost",
+    "port": 3306,
+    "username": "root",
+    "password": "123456"
 }
-```
 
-### 3. 重启Claude Desktop
-
-重启Claude Desktop以加载MCP服务器配置。
-
-### 4. 验证安装
-
-在Claude Desktop中测试：
-
-```
-列出所有可用的数据库
-```
-
-## 使用示例
-
-### 查询数据
-
-```
-查询employees表中所有销售部门的员工
-```
-
-### 创建预测模型
-
-```
-创建一个模型来预测下个月的销售额
-```
-
-### 连接数据源
-
-```
-连接到我的MySQL数据库，主机是localhost，端口3306
-```
-
-### 数据分析
-
-```
-分析2024年各地区的销售趋势
-```
-
-### 构建知识库
-
-```
-创建一个技术文档知识库
-```
-
-### 智能问答
-
-```
-根据技术文档回答设备报错0xE1怎么处理
-```
-
-## 与其他框架集成
-
-### CrewAI集成
-
-CrewAI是一个强大的多Agent协作框架，支持通过MCP协议集成外部工具。以下是使用本技能与CrewAI集成的几种方式：
-
-#### 方法一：使用 MCP DSL（推荐）
-
-```python
-from crewai import Agent, Task, Crew, Process
-import os
-
-# 创建集成MindsDB MCP的Agent
-mindsdb_agent = Agent(
-    role="数据库分析师",
-    goal="通过自然语言查询和分析数据库",
-    backstory="专业的数据库分析师，精通SQL和数据分析",
-    
-    # 使用MCP DSL直接连接
-    mcps=[
-        f"https://cloud.mindsdb.com/mcp?api_key={os.getenv('MINDSDB_API_KEY')}"
-    ],
-    
-    verbose=True
-)
-
-# 创建任务
-task = Task(
-    description="查询sensor_data表，分析温度异常",
-    expected_output="温度异常分析报告",
-    agent=mindsdb_agent
-)
-
-# 执行
-crew = Crew(agents=[mindsdb_agent], tasks=[task])
-result = crew.kickoff()
-```
-
-#### 方法二：使用 MCPServerAdapter
-
-```python
-from crewai import Agent
-from crewai_tools import MCPServerAdapter
-from mcp import StdioServerParameters
-import os
-
-# 配置MCP服务器参数
-server_params = StdioServerParameters(
-    command="npx",
-    args=["@mindsdb/mcp-server"],
-    env={
-        "MINDSDB_API_KEY": os.getenv("MINDSDB_API_KEY"),
-        "MINDSDB_HOST": "cloud.mindsdb.com",
-        **os.environ
-    }
-)
-
-# 使用上下文管理器连接
-with MCPServerAdapter(server_params) as mcp_tools:
-    print(f"可用工具: {[tool.name for tool in mcp_tools]}")
-    
-    agent = Agent(
-        role="数据分析师",
-        goal="分析数据库数据",
-        backstory="专业的数据分析师",
-        tools=mcp_tools,
-        verbose=True
-    )
-```
-
-#### 方法三：筛选特定工具
-
-```python
-# 只加载SQL相关工具
-with MCPServerAdapter(server_params) as mcp_tools:
-    sql_agent = Agent(
-        role="SQL专家",
-        goal="执行SQL查询",
-        backstory="数据库查询专家",
-        tools=[
-            mcp_tools["sql_db_query"],
-            mcp_tools["sql_db_schema"],
-            mcp_tools["sql_db_list_tables"]
-        ],
-        verbose=True
-    )
-
-# 或通过构造函数筛选
-with MCPServerAdapter(server_params, "sql_db_query", "sql_db_schema") as mcp_tools:
-    query_agent = Agent(
-        role="查询专家",
-        goal="执行数据库查询",
-        backstory="专注于数据查询",
-        tools=mcp_tools,
-        verbose=True
-    )
-```
-
-#### 方法四：与 CrewBase 结合
-
-```python
-from crewai import Agent, CrewBase
-from mcp import StdioServerParameters
-import os
-
-@CrewBase
-class MindsDBCrew:
-    """集成MindsDB MCP的Crew"""
-    
-    mcp_server_params = [
-        StdioServerParameters(
-            command="npx",
-            args=["@mindsdb/mcp-server"],
-            env={
-                "MINDSDB_API_KEY": os.getenv("MINDSDB_API_KEY"),
-                **os.environ
-            }
-        )
-    ]
-    
-    @agent
-    def data_analyst(self):
-        return Agent(
-            role="数据分析师",
-            goal="分析数据库数据",
-            backstory="专业的数据分析师",
-            tools=self.get_mcp_tools(),
-            verbose=True
-        )
-    
-    @agent
-    def query_specialist(self):
-        return Agent(
-            role="查询专家",
-            goal="执行SQL查询",
-            backstory="SQL查询专家",
-            tools=self.get_mcp_tools("sql_db_query", "sql_db_schema"),
-            verbose=True
-        )
-```
-
-#### 完整示例：多Agent协作
-
-```python
-from crewai import Agent, Task, Crew, Process
-import os
-
-api_key = os.getenv("MINDSDB_API_KEY")
-
-# Agent 1: 数据库连接专家
-connection_agent = Agent(
-    role="数据库连接专家",
-    goal="连接和管理数据库连接",
-    backstory="精通各种数据库连接和配置",
-    mcps=[f"https://cloud.mindsdb.com/mcp?api_key={api_key}"],
-    verbose=True
-)
-
-# Agent 2: 数据分析专家
-analysis_agent = Agent(
-    role="数据分析专家",
-    goal="分析设备数据并发现异常",
-    backstory="资深数据分析师，擅长时序数据分析",
-    mcps=[f"https://cloud.mindsdb.com/mcp?api_key={api_key}#sql_db_query"],
-    verbose=True
-)
-
-# Agent 3: 报告生成专家
-report_agent = Agent(
-    role="报告生成专家",
-    goal="生成专业的分析报告",
-    backstory="技术文档撰写专家",
-    verbose=True
-)
-
-# 创建任务
-tasks = [
-    Task(
-        description="连接TDengine数据库，验证sensor_data表是否存在",
-        expected_output="连接状态和表结构信息",
-        agent=connection_agent
-    ),
-    Task(
-        description="分析sensor_data表，找出温度超过80度的异常设备",
-        expected_output="数据分析结果和异常设备列表",
-        agent=analysis_agent
-    ),
-    Task(
-        description="生成包含维护建议的专业报告",
-        expected_output="结构化的分析报告",
-        agent=report_agent
-    )
-]
-
-# 创建并执行Crew
-crew = Crew(
-    agents=[connection_agent, analysis_agent, report_agent],
-    tasks=tasks,
-    process=Process.sequential,
-    verbose=True
-)
-
-result = crew.kickoff()
+# 执行连接
+result = mindsdb_skill_entry(params)
 print(result)
 ```
 
-#### 环境配置
+#### 示例2：RAG知识库全流程测试（核心） | Example 2: RAG Knowledge Base Full Process Test (Core)
 
-```bash
-# 安装依赖
-pip install crewai crewai-tools[mcp]
+```python
+from scripts.mindsdb_skill import mindsdb_skill_entry
+import json
 
-# 设置环境变量
-export MINDSDB_API_KEY="your-api-key"
-export MINDSDB_HOST="cloud.mindsdb.com"
+# 基础配置（已连接MySQL数据源，数据源名称为mysql_db）
+base_config = {
+    "host": "localhost",
+    "port": 47334,
+    "username": "admin",
+    "password": "password123",
+    "database": "mysql_db"
+}
+
+# 1. 创建RAG知识库（设置检索参数top_k=3，相关性阈值=0.6）
+create_kb = {**base_config, "action": "create_kb", "kb_name": "test_rag_kb", "top_k": 3, "threshold": 0.6}
+create_result = mindsdb_skill_entry(create_kb)
+print("创建知识库结果：", json.dumps(create_result, ensure_ascii=False, indent=2))
+
+# 2. 列出所有RAG知识库
+list_kb = {**base_config, "action": "list_kb"}
+list_result = mindsdb_skill_entry(list_kb)
+print("所有知识库列表：", json.dumps(list_result, ensure_ascii=False, indent=2))
+
+# 3. 知识库智能问答（RAG核心功能）
+query_kb = {**base_config, "action": "query_kb", "kb_name": "test_rag_kb", "nl_text": "查询数据源中的核心数据信息", "top_k": 3}
+query_result = mindsdb_skill_entry(query_kb)
+print("问答结果：", json.dumps(query_result, ensure_ascii=False, indent=2))
+
+# 4. 删除RAG知识库
+delete_kb = {**base_config, "action": "delete_kb", "kb_name": "test_rag_kb"}
+delete_result = mindsdb_skill_entry(delete_kb)
+print("删除知识库结果：", json.dumps(delete_result, ensure_ascii=False, indent=2))
 ```
 
-#### 最佳实践
+## 四、核心功能详细说明 | IV. Detailed Core Function Description
 
-1. **使用特定工具筛选**: 通过 `#` 语法只加载需要的工具
-   ```python
-   mcps=["https://cloud.mindsdb.com/mcp?api_key=key#sql_db_query"]
-   ```
+### 4.1 RAG知识库操作（核心） | 4.1 RAG Knowledge Base Operations (Core)
 
-2. **安全处理密钥**: 使用环境变量，不要硬编码
-   ```python
-   api_key = os.getenv("MINDSDB_API_KEY")
-   ```
+RAG相关操作是本技能包的核心，支持创建、查询、删除、列表全流程，所有操作均通过MCP接口与MindsDB交互，自动完成数据向量化、检索匹配等底层逻辑。当MindsDB未配置embedding model时，技能会自动切换到本地RAG系统（ChromaDB + all-MiniLM-L6-v2）。
 
-3. **配置备用服务器**: 确保任务不会因单点故障失败
-   ```python
-   mcps=[
-       "https://cloud.mindsdb.com/mcp?api_key=primary_key",
-       "https://backup.mindsdb.com/mcp?api_key=backup_key"
-   ]
-   ```
+RAG-related operations are the core of this skill package, supporting the full process of creation, querying, deletion, and listing. All operations interact with MindsDB through the MCP interface, automatically completing underlying logic such as data vectorization and retrieval matching. When MindsDB embedding model is not configured, the skill will automatically switch to the local RAG system (ChromaDB + all-MiniLM-L6-v2).
 
-4. **合理设置超时**: CrewAI默认连接超时10秒，执行超时30秒
+| 动作（action） | 必传参数 | 可选参数 | 功能说明 |
+|---------------|---------|---------|----------|
+| create_kb | database、kb_name | top_k、threshold | 创建RAG知识库，关联指定数据源，可配置检索返回数量和相关性阈值 |
+| query_kb | database、kb_name、nl_text | top_k、threshold | 向指定知识库发送自然语言查询，返回相关性匹配的结果 |
+| delete_kb | kb_name | 无 | 删除指定名称的RAG知识库 |
+| list_kb | 无 | 无 | 列出所有已创建的RAG知识库 |
 
-## 支持的数据源
+| Action | Required Parameters | Optional Parameters | Function Description |
+|--------|-------------------|-------------------|---------------------|
+| create_kb | database, kb_name | top_k, threshold | Create RAG knowledge base, associate with specified data source, configurable retrieval return quantity and relevance threshold |
+| query_kb | database, kb_name, nl_text | top_k, threshold | Send natural language query to specified knowledge base, return relevance-matched results |
+| delete_kb | kb_name | None | Delete RAG knowledge base with specified name |
+| list_kb | None | None | List all created RAG knowledge bases |
 
-### 关系型数据库
-- MySQL, PostgreSQL, SQL Server, Oracle, SQLite
+### 4.2 其他常用操作 | 4.2 Other Common Operations
 
-### NoSQL数据库
-- MongoDB, Redis, Cassandra, Elasticsearch
+| 动作（action） | 必传参数 | 功能说明 |
+|---------------|---------|----------|
+| connect_db | db_type | 连接指定类型的数据源，支持MySQL、PostgreSQL、CSV等200+类型 |
+| list_databases | 无 | 列出所有已连接的数据源 |
+| show_table_schema | database | 查看指定数据源的所有数据表结构 |
+| nl_query | database、nl_text | 通过自然语言查询指定数据源的数据，无需编写SQL |
+| exec_sql | database、sql | 执行自定义SQL语句，操作指定数据源 |
+| create_model | model_name、predict_field | 基于指定数据源创建预测模型，指定预测字段 |
+| analyze_data | database、nl_text | 对指定数据源进行自然语言驱动的数据分析 |
 
-### 云数据库
-- AWS RDS, Google Cloud SQL, Azure Database
+| Action | Required Parameters | Function Description |
+|--------|-------------------|---------------------|
+| connect_db | db_type | Connect to specified type of data source, supporting MySQL, PostgreSQL, CSV, etc. (200+ types) |
+| list_databases | None | List all connected data sources |
+| show_table_schema | database | View all data table structures of specified data source |
+| nl_query | database, nl_text | Query data from specified data source through natural language, no need to write SQL |
+| exec_sql | database, sql | Execute custom SQL statements to operate specified data source |
+| create_model | model_name, predict_field | Create prediction model based on specified data source, specify prediction field |
+| analyze_data | database, nl_text | Perform natural language-driven data analysis on specified data source |
 
-### 文件格式
-- CSV, Excel, JSON, Parquet
+## 五、返回格式说明 | V. Return Format Description
 
-### SaaS应用
-- Gmail, Slack, Salesforce, Shopify
+所有操作的返回结果均为统一JSON格式，便于Agent解析和处理：
 
-## 文档结构
+All operation return results are in a unified JSON format for easy Agent parsing and processing:
 
-```
-mindsdb-skill/
-├── SKILL.md                    # 主技能文件
-├── README.md                   # 项目说明
-├── INSTALL.md                  # 安装配置指南
-├── USAGE.md                    # 使用示例
-├── TROUBLESHOOTING.md          # 故障排除
-├── evals/
-│   └── evals.json             # 测试用例
-└── references/
-    ├── mindsdb-tools.md       # 工具参考文档
-    ├── data-sources.md        # 数据源配置
-    ├── sql-examples.md        # SQL查询示例
-    ├── sdk-api.md            # SDK和API参考
-    ├── knowledge-base.md     # 知识库构建指南
-    ├── mlops-advanced.md     # MLOps和高级功能
-    ├── streaming-pipelines.md # 实时流处理和数据管道
-    └── intelligent-analysis.md # 智能分析指南 ✨
+```json
+{
+  "code": 0,          // 状态码：0=成功，非0=失败
+  "msg": "success",   // 状态信息，失败时返回错误详情（RAG操作会有专属提示）
+  "data": {}          // 业务数据，成功时返回操作结果（如知识库列表、问答结果等）
+}
 ```
 
-## 常见问题
+### 状态码说明 | Status Code Description
 
-### Q: 如何获取MindsDB API密钥？
-A: 访问 https://cloud.mindsdb.com 注册账号并获取API密钥。
+- 0：操作成功
+  0: Operation successful
 
-### Q: 支持哪些数据库？
-A: 支持200+数据源，包括MySQL、PostgreSQL、MongoDB等主流数据库。
+- -1：缺失必传参数action
+  -1: Missing required parameter action
 
-### Q: 如何处理大数据量查询？
-A: 使用LIMIT限制结果数量，或使用分页查询。
+- -2：不支持的action
+  -2: Unsupported action
 
-### Q: 可以创建自定义模型吗？
-A: 可以，MindsDB支持多种模型引擎，包括Lightwood、XGBoost等。
+- -3：缺失当前action的必传参数
+  -3: Missing required parameters for current action
 
-## 贡献指南
+- -4：MCP接口请求失败（RAG操作会补充专属错误提示）
+  -4: MCP interface request failed (RAG operations will add specific error prompts)
 
-欢迎提交问题和改进建议！
+- -5：MindsDB连接超时
+  -5: MindsDB connection timeout
 
-## 许可证
+- -6：MindsDB服务不可达
+  -6: MindsDB service unreachable
 
-MIT License
+- -7：HTTP请求异常
+  -7: HTTP request exception
 
-## 联系方式
+- -8：未知异常（RAG相关异常会补充专属提示）
+  -8: Unknown exception (RAG-related exceptions will add specific prompts)
 
-- MindsDB文档: https://docs.mindsdb.com
-- MCP协议: https://modelcontextprotocol.io
+## 六、注意事项 | VI. Notes
+
+- 创建RAG知识库（create_kb）前，必须先通过connect_db连接数据源，否则会报错。
+  Before creating a RAG knowledge base (create_kb), you must first connect to the data source through connect_db, otherwise an error will be reported.
+
+- RAG知识库的名称（kb_name）需唯一，重复创建会返回错误。
+  The name of the RAG knowledge base (kb_name) must be unique; duplicate creation will return an error.
+
+- 检索参数top_k（默认5）和threshold（默认0.7）可根据需求调整，threshold值越高，检索结果相关性越强。
+  The retrieval parameters top_k (default 5) and threshold (default 0.7) can be adjusted according to needs; the higher the threshold value, the stronger the relevance of retrieval results.
+
+- **本地RAG注意事项**：
+  - 首次使用本地RAG时会自动从国内源（https://hf-mirror.com）下载all-MiniLM-L6-v2模型（约80MB），解决网络问题
+  - 当模型下载失败时，会自动使用基于TF-IDF的检索作为降级方案
+  - 本地RAG默认使用内存存储，重启后数据会丢失（可配置持久化）
+  - 本地RAG的性能取决于硬件，但对于一般场景足够使用
+  
+  **Local RAG Notes**:
+  - The first time you use local RAG, it will automatically download the all-MiniLM-L6-v2 model (about 80MB) from domestic sources (https://hf-mirror.com) to solve network issues
+  - When model download fails, it will automatically use TF-IDF-based retrieval as a fallback solution
+  - Local RAG uses memory storage by default, and data will be lost after restart (persistence can be configured)
+  - The performance of local RAG depends on hardware, but it is sufficient for general scenarios
+
+- 测试代码位于mindsdb_skill.py末尾，可直接运行，需提前修改base_config中的数据源信息。
+  The test code is located at the end of mindsdb_skill.py and can be run directly, but you need to modify the data source information in base_config in advance.
+
+- 若MindsDB服务部署在远程服务器，需修改host参数为远程IP，并确保端口可访问。
+  If the MindsDB service is deployed on a remote server, you need to modify the host parameter to the remote IP and ensure the port is accessible.
+
+## 七、扩展说明 | VII. Extension Instructions
+
+- 本技能包可直接集成到各类Agent系统，只需调用mindsdb_skill_entry()入口函数，传入符合要求的参数即可。
+  This skill package can be directly integrated into various Agent systems by simply calling the mindsdb_skill_entry() entry function and passing in the required parameters.
+
+- 支持扩展更多MCP接口操作，可在_generate_mcp_request()方法中添加新的action逻辑。
+  Supports extending more MCP interface operations; new action logic can be added in the _generate_mcp_request() method.
+
+- RAG底层依赖MindsDB的知识库功能，若需自定义向量化模型，可在MindsDB中进行配置后，本技能包无需修改即可兼容。
+  RAG relies on MindsDB's knowledge base functionality at the bottom; if you need to customize the vectorization model, you can configure it in MindsDB, and this skill package will be compatible without modification.
+
+## 参考资料 | VIII. Reference Materials
+
+- **知识库构建指南**：references/knowledge-base.md - 详细的RAG知识库构建流程和示例
+  **Knowledge Base Construction Guide**: references/knowledge-base.md - Detailed RAG knowledge base construction process and examples
+
+- **工业设备监控案例**：references/industrial-monitoring-case.md - TDengine时序数据库实际应用案例
+  **Industrial Equipment Monitoring Case**: references/industrial-monitoring-case.md - TDengine time-series database practical application case
+
+- **数据源配置参考**：references/data-sources.md - 各种数据库连接配置示例
+  **Data Source Configuration Reference**: references/data-sources.md - Various database connection configuration examples
+
+- **智能分析指南**：references/intelligent-analysis.md - 数据分析方法和示例
+  **Intelligent Analysis Guide**: references/intelligent-analysis.md - Data analysis methods and examples
+
+- **MindsDB工具介绍**：references/mindsdb-tools.md - MindsDB工具使用指南
+  **MindsDB Tools Introduction**: references/mindsdb-tools.md - MindsDB tool usage guide
+
+- **MLOps高级指南**：references/mlops-advanced.md - 模型部署和监控最佳实践
+  **MLOps Advanced Guide**: references/mlops-advanced.md - Model deployment and monitoring best practices
+
+- **SDK和API参考**：references/sdk-api.md - MindsDB编程接口说明
+  **SDK and API Reference**: references/sdk-api.md - MindsDB programming interface description
+
+- **SQL示例集合**：references/sql-examples.md - 常见SQL查询和操作示例
+  **SQL Examples Collection**: references/sql-examples.md - Common SQL query and operation examples
+
+- **流处理管道指南**：references/streaming-pipelines.md - 实时数据处理示例
+  **Streaming Pipeline Guide**: references/streaming-pipelines.md - Real-time data processing examples
+
+- **MindsDB官方文档**：https://docs.mindsdb.com/  **MindsDB Official Documentation**: https://docs.mindsdb.com/
