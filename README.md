@@ -1,12 +1,74 @@
-# MindsDB MCP Skill v2.0
+# MindsDB MCP Skill v2.1
 
 ## 项目简介 | Project Introduction
 
-基于MindsDB MCP接口开发的Python技能包，采用**三模块架构**设计，支持RAG知识库全流程操作、NLP2SQL自然语言查询、智能数据分析等功能，可直接集成到Agent系统，实现数据源与RAG知识库的一站式管理。
+基于MindsDB MCP接口开发的Python技能包，采用**三模块架构**设计，支持RAG知识库全流程操作、NLP2SQL自然语言查询、智能数据分析、**元数据自动提取**和**智能查询引擎**等功能，可直接集成到Agent系统，实现数据源与RAG知识库的一站式管理。
+
+**v2.1.0 核心亮点**：
+- **零配置智能查询**：自动提取数据库元数据，无需手动配置即可进行自然语言查询
+- **意图识别与SQL生成**：基于元数据理解用户问题，自动生成并执行SQL
+- **完整元数据管理**：自动提取表结构、列信息、业务含义、表关系等
 
 **核心价值**：任意 Agent（包括 AI IDE）可通过本技能实现 NLP2SQL 能力，无需在 MindsDB EDIT 内定义 Agent+RAG，通过外部 Agent+SKILL+MindsDB 的组合方式，大大提升效率和通用性。
 
 **Core Value**: Any Agent (including AI IDE) can implement NLP2SQL capabilities through this skill, without defining Agent+RAG within MindsDB EDIT. The combination of external Agent+SKILL+MindsDB greatly improves efficiency and versatility.
+
+---
+
+## 新增功能 | What's New (v2.1.0)
+
+### 🚀 元数据自动提取 (metadata_extractor.py)
+
+**功能亮点**：
+- ✅ 自动从DuckDB数据库提取完整元数据
+- ✅ 智能推断表和列的业务含义
+- ✅ 自动检测表之间的关系（外键关联）
+- ✅ 按业务域自动分组
+
+**快速开始**：
+```python
+from scripts.metadata_extractor import extract_metadata_from_duckdb
+
+# 一键提取元数据
+data_dict, stats = extract_metadata_from_duckdb(
+    db_path="data/weekly_report_warehouse.duckdb",
+    save_path="data/metadata.json"
+)
+
+print(f"提取完成：{stats['tables_extracted']}个表, {stats['columns_extracted']}个列")
+print(data_dict.generate_summary())
+```
+
+### 🧠 智能查询引擎 (intelligent_query.py)
+
+**功能亮点**：
+- ✅ 自然语言理解，自动识别查询意图
+- ✅ 基于元数据智能匹配表和字段
+- ✅ 自动生成并执行SQL查询
+- ✅ 支持计数、列表、统计、详情等多种查询类型
+
+**快速开始**：
+```python
+from scripts.intelligent_query import IntelligentQueryEngine
+
+# 初始化引擎（自动加载元数据）
+engine = IntelligentQueryEngine("data/weekly_report_warehouse.duckdb")
+
+# 自然语言查询
+result = engine.query("总共几个部门")
+print(f"SQL: {result['sql']}")
+print(f"结果: {result['data']}")
+```
+
+**查询示例**：
+| 自然语言问题 | 自动生成的SQL | 结果 |
+|-------------|--------------|------|
+| "总共几个部门" | `SELECT COUNT(*) FROM odw_department` | 168 |
+| "有多少人" | `SELECT COUNT(*) FROM odw_human_resource` | 176 |
+| "项目进度如何" | `SELECT * FROM odw_project LIMIT 10` | 10条项目记录 |
+| "有哪些部门" | `SELECT DISTINCT department_name FROM odw_department` | 部门列表 |
+
+---
 
 ## 架构设计 | Architecture Design
 
@@ -25,6 +87,7 @@
 - **功能**：
   - 本地RAG系统初始化（ChromaDB + all-MiniLM-L6-v2）
   - 知识库管理（创建、列表、删除）
+  - **元数据自动提取**（v2.1.0新增）：自动提取数据库结构信息
   - 数据字典管理（获取、搜索、刷新）
   - 数据持久化管理
 
@@ -32,9 +95,19 @@
 - **职责**：利用RAG进行智能数据分析和查询
 - **功能**：
   - 自然语言到SQL转换（NLP2SQL）
+  - **智能查询引擎**（v2.1.0新增）：基于元数据理解用户意图
   - 智能数据分析
   - 知识库智能问答
   - AI模型创建与预测
+
+### 新增模块（v2.1.0）
+
+| 模块 | 文件 | 功能 |
+|------|------|------|
+| 元数据提取 | `metadata_extractor.py` | 自动提取数据库元数据 |
+| 智能查询 | `intelligent_query.py` | 基于元数据的自然语言查询 |
+
+---
 
 ## 一、功能概述 | I. Function Overview
 
@@ -49,6 +122,12 @@ This skill package is centered around RAG (Retrieval-Augmented Generation), enca
 
 - **本地RAG备用方案**：当MindsDB未配置embedding model时，自动切换到本地RAG系统（ChromaDB + all-MiniLM-L6-v2），优先从国内源下载模型，确保RAG功能始终可用。
   **Local RAG Alternative**: When MindsDB embedding model is not configured, automatically switch to local RAG system (ChromaDB + all-MiniLM-L6-v2), prioritize downloading models from domestic sources to ensure RAG functionality is always available.
+
+- **元数据自动提取**（v2.1.0新增）：自动从数据库提取表结构、列信息、业务含义、表关系等元数据，无需手动配置。
+  **Metadata Auto-Extraction** (v2.1.0 New): Automatically extract metadata such as table structure, column information, business meaning, and table relationships from the database without manual configuration.
+
+- **智能查询引擎**（v2.1.0新增）：基于元数据理解用户自然语言问题，自动识别意图，生成并执行SQL查询。
+  **Intelligent Query Engine** (v2.1.0 New): Understand user natural language questions based on metadata, automatically identify intent, generate and execute SQL queries.
 
 - **数据源管理**：连接多类型数据源（MySQL、DuckDB、TDengine等）、列出所有数据源、查看数据表结构。
   **Data Source Management**: Connect multiple types of data sources (MySQL, DuckDB, TDengine, etc.), list all data sources, view data table structures.
@@ -65,6 +144,8 @@ This skill package is centered around RAG (Retrieval-Augmented Generation), enca
 - **异常处理**：完善的参数校验和异常捕获，提供RAG专属错误提示，便于调试。
   **Exception Handling**: Comprehensive parameter validation and exception capture, providing RAG-specific error prompts for easy debugging.
 
+---
+
 ## 二、环境准备 | II. Environment Preparation
 
 ### 2.1 依赖安装 | 2.1 Dependency Installation
@@ -73,6 +154,11 @@ This skill package is centered around RAG (Retrieval-Augmented Generation), enca
 
 ```bash
 pip install requests
+```
+
+**元数据提取依赖**（v2.1.0新增）：
+```bash
+pip install duckdb
 ```
 
 **本地RAG依赖**：当MindsDB RAG不可用时，技能会自动安装以下依赖：
@@ -124,6 +210,8 @@ set MINDSDB_USERNAME=admin
 set MINDSDB_PASSWORD=password123
 ```
 
+---
+
 ## 三、快速开始 | III. Quick Start
 
 ### 3.1 项目结构 | 3.1 Project Structure
@@ -131,13 +219,15 @@ set MINDSDB_PASSWORD=password123
 ```
 mindsdb-mcp-skill/
 ├── scripts/
-│   ├── db_connector.py           # 公共数据库连接模块（新增）
-│   ├── workflow_rag_build.py     # 工作流1：本地RAG构建与管理（新增）
-│   ├── workflow_rag_analysis.py  # 工作流2：基于RAG的NLP2SQL和数据分析（新增）
+│   ├── db_connector.py           # 公共数据库连接模块
+│   ├── workflow_rag_build.py     # 工作流1：本地RAG构建与管理
+│   ├── workflow_rag_analysis.py  # 工作流2：基于RAG的NLP2SQL和数据分析
 │   ├── data_dictionary.py        # 数据字典实现
+│   ├── metadata_extractor.py     # 元数据自动提取模块（新增v2.1.0）
+│   ├── intelligent_query.py      # 智能查询引擎（新增v2.1.0）
 │   └── mindsdb_skill.py          # 原核心技能代码（保留兼容）
 ├── evals/
-│   └── evals.json                # 测试用例（已更新为三模块架构）
+│   └── evals.json                # 测试用例
 ├── data/
 │   ├── chromadb_persist/         # RAG向量数据持久化目录
 │   └── data_dictionary.json      # 数据字典持久化文件
@@ -147,7 +237,58 @@ mindsdb-mcp-skill/
 └── mcp.json                      # MCP配置文件
 ```
 
-### 3.2 基础调用示例 | 3.2 Basic Call Examples
+### 3.2 新增功能快速开始 | 3.2 Quick Start for New Features (v2.1.0)
+
+#### 元数据自动提取 | Metadata Auto-Extraction
+
+```python
+from scripts.metadata_extractor import extract_metadata_from_duckdb
+
+# 提取DuckDB数据库元数据
+data_dict, stats = extract_metadata_from_duckdb(
+    db_path="data/weekly_report_warehouse.duckdb",
+    save_path="data/metadata.json"
+)
+
+# 查看提取统计
+print(f"表数量: {stats['tables_extracted']}")
+print(f"列数量: {stats['columns_extracted']}")
+print(f"关系数量: {stats['relationships_detected']}")
+
+# 查看数据字典摘要
+print(data_dict.generate_summary())
+```
+
+#### 智能查询引擎 | Intelligent Query Engine
+
+```python
+from scripts.intelligent_query import IntelligentQueryEngine
+
+# 初始化引擎（自动加载或提取元数据）
+engine = IntelligentQueryEngine(
+    db_path="data/weekly_report_warehouse.duckdb"
+)
+
+# 自然语言查询 - 计数
+result = engine.query("总共几个部门")
+print(f"SQL: {result['sql']}")      # SELECT COUNT(*) FROM odw_department
+print(f"结果: {result['data']}")    # [(168,)]
+
+# 自然语言查询 - 列表
+result = engine.query("有哪些项目")
+print(f"SQL: {result['sql']}")
+print(f"结果: {result['data']}")
+
+# 自然语言查询 - 详情
+result = engine.query("项目进度如何")
+print(f"SQL: {result['sql']}")
+print(f"结果: {result['data']}")
+
+# 关闭连接
+engine.close()
+```
+
+### 3.3 基础调用示例 | 3.3 Basic Call Examples
 
 #### 方式1：使用公共数据库连接模块 | Method 1: Use Database Connector Module
 
@@ -216,7 +357,7 @@ result = rag_analysis_workflow_entry(params)
 print(result)
 ```
 
-### 3.3 RAG知识库全流程测试（核心） | 3.3 RAG Knowledge Base Full Process Test (Core)
+### 3.4 RAG知识库全流程测试（核心） | 3.4 RAG Knowledge Base Full Process Test (Core)
 
 ```python
 from scripts.workflow_rag_build import rag_build_workflow_entry
@@ -253,6 +394,8 @@ delete_result = rag_build_workflow_entry(delete_kb)
 print("删除知识库结果：", json.dumps(delete_result, ensure_ascii=False, indent=2))
 ```
 
+---
+
 ## 四、核心功能详细说明 | IV. Detailed Core Function Description
 
 ### 4.1 模块1：db_connector（公共数据库连接模块） | 4.1 Module 1: db_connector (Database Connector)
@@ -288,6 +431,27 @@ print("删除知识库结果：", json.dumps(delete_result, ensure_ascii=False, 
 | analyze_data | database, nl_text | 无 | 对数据进行自然语言驱动的智能分析 |
 | query_kb | kb_name, nl_text | top_k, threshold | 向知识库发送自然语言查询 |
 | create_model | model_name, predict_field | database | 创建AI预测模型 |
+
+### 4.4 新增模块（v2.1.0） | 4.4 New Modules (v2.1.0)
+
+#### 元数据提取模块 (metadata_extractor.py)
+
+| 方法 | 必传参数 | 功能说明 |
+|------|---------|----------|
+| extract_from_duckdb | db_path | 从DuckDB提取完整元数据 |
+| get_extraction_stats | 无 | 获取提取统计信息 |
+| save_to_file | file_path | 保存数据字典到文件 |
+
+#### 智能查询模块 (intelligent_query.py)
+
+| 方法 | 必传参数 | 功能说明 |
+|------|---------|----------|
+| query | question | 主查询接口，一站式智能查询 |
+| understand_question | question | 理解用户问题，提取关键信息 |
+| generate_sql | understanding | 根据理解结果生成SQL |
+| execute_query | sql | 执行SQL查询 |
+
+---
 
 ## 五、返回格式说明 | V. Return Format Description
 
@@ -338,6 +502,11 @@ All operation return results are in a unified JSON format for easy Agent parsing
 - **-10**：本地RAG初始化失败
   -10: Local RAG initialization failed
 
+- **-11**：元数据提取失败（v2.1.0新增）
+  -11: Metadata extraction failed (v2.1.0 New)
+
+---
+
 ## 六、注意事项 | VI. Notes
 
 - 创建RAG知识库（create_kb）前，建议先通过db_connector或workflow_rag_analysis连接数据源。
@@ -361,11 +530,23 @@ All operation return results are in a unified JSON format for easy Agent parsing
   - Local RAG uses ChromaDB persistent storage, data is saved in the `data/chromadb_persist` directory
   - Data dictionary is automatically persisted to the `data/data_dictionary.json` file
 
+- **元数据自动提取注意事项**（v2.1.0新增）：
+  - 目前仅支持DuckDB数据库的元数据自动提取
+  - 首次使用智能查询引擎时会自动提取并缓存元数据
+  - 元数据文件默认保存在数据库同目录，文件名格式：`{database_name}_metadata.json`
+  
+  **Metadata Auto-Extraction Notes** (v2.1.0 New):
+  - Currently only supports automatic metadata extraction for DuckDB databases
+  - Metadata will be automatically extracted and cached on first use of the intelligent query engine
+  - Metadata files are saved in the same directory as the database by default, with filename format: `{database_name}_metadata.json`
+
 - 测试代码位于各模块文件末尾，可直接运行，需提前修改配置中的数据源信息。
   The test code is located at the end of each module file and can be run directly, but you need to modify the data source information in the configuration in advance.
 
 - 若MindsDB服务部署在远程服务器，需修改host参数为远程IP，并确保端口可访问。
   If the MindsDB service is deployed on a remote server, you need to modify the host parameter to the remote IP and ensure the port is accessible.
+
+---
 
 ## 七、扩展说明 | VII. Extension Instructions
 
@@ -373,11 +554,27 @@ All operation return results are in a unified JSON format for easy Agent parsing
   - db_connector模块：`from scripts.db_connector import get_db_connector`
   - RAG构建工作流：`from scripts.workflow_rag_build import rag_build_workflow_entry`
   - RAG分析工作流：`from scripts.workflow_rag_analysis import rag_analysis_workflow_entry`
+  - **元数据提取模块**（v2.1.0新增）：`from scripts.metadata_extractor import extract_metadata_from_duckdb`
+  - **智能查询引擎**（v2.1.0新增）：`from scripts.intelligent_query import IntelligentQueryEngine`
 
 - 支持扩展更多MCP接口操作，可在各模块中添加新的action逻辑。
   Supports extending more MCP interface operations; new action logic can be added in each module.
 
+---
+
 ## 八、版本历史 | VIII. Version History
+
+- **v2.1.0** (2026-03-19)：新增元数据自动提取与智能查询功能
+  - 新增metadata_extractor模块，支持自动提取数据库元数据
+  - 新增intelligent_query模块，支持基于元数据的智能查询
+  - 优化RAG知识库构建流程，自动包含元数据
+  - 更新文档，添加新功能使用说明
+  
+  **v2.1.0** (2026-03-19): Added metadata auto-extraction and intelligent query features
+  - Added metadata_extractor module for automatic database metadata extraction
+  - Added intelligent_query module for metadata-based intelligent queries
+  - Optimized RAG knowledge base build process to automatically include metadata
+  - Updated documentation with new feature usage instructions
 
 - **v2.0.0** (2026-03-19)：重构为三模块架构（db_connector、workflow_rag_build、workflow_rag_analysis）
   - 新增公共数据库连接模块db_connector

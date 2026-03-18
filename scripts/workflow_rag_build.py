@@ -21,6 +21,29 @@ if current_dir not in sys.path:
 from data_dictionary import DataDictionary
 from db_connector import get_db_connector
 
+# 在文件顶部添加导入
+from metadata_extractor import MetadataExtractor
+
+# 在 RAGBuildWorkflow 类中添加新方法
+def extract_and_index_metadata(self, db_path: str, collection) -> bool:
+    """提取元数据并添加到RAG"""
+    try:
+        extractor = MetadataExtractor()
+        data_dict = extractor.extract_from_duckdb(db_path)
+        
+        # 生成RAG文档并添加
+        documents = data_dict.generate_rag_documents()
+        for doc in documents:
+            collection.add(
+                ids=[doc['id']],
+                documents=[doc['text']],
+                metadatas=[doc['metadata']]
+            )
+        
+        return True
+    except Exception as e:
+        print(f"元数据提取失败: {e}")
+        return False
 
 class RAGBuildWorkflow:
     """本地RAG构建与管理工作流"""
