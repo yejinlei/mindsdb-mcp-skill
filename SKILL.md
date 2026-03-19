@@ -67,6 +67,27 @@ A universal database interaction skill based on the MindsDB MCP protocol, featur
 
 ### 环境准备 | Environment Preparation
 
+### Python虚拟环境建议 | Python Virtual Environment Recommendation
+
+为避免污染全局Python环境，建议使用项目级虚拟环境：
+
+**创建并激活虚拟环境**：
+```bash
+# 在项目目录中创建虚拟环境
+python -m venv venv
+
+# 激活虚拟环境 (Windows)
+venv\Scripts\activate
+
+# 激活虚拟环境 (Linux/Mac)
+source venv/bin/activate
+```
+
+**使用虚拟环境的优势**：
+- 隔离项目依赖，避免全局Python环境污染
+- 确保依赖版本一致性
+- 简化依赖管理和部署
+
 安装技能包所需依赖：
 
 ```bash
