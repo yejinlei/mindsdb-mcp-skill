@@ -4,13 +4,11 @@
 
 基于MindsDB MCP接口开发的Python技能包，采用**三模块架构**设计，支持RAG知识库全流程操作、NLP2SQL自然语言查询、智能数据分析、**元数据自动提取**和**智能查询引擎**等功能，可直接集成到Agent系统，实现数据源与RAG知识库的一站式管理。
 
-**v2.2.0 核心亮点**：
+**核心亮点**：
 - **LLM智能分析工作流**：利用Agent内置LLM能力进行意图理解和智能分析
 - **中英文双语支持**：支持中文和英文自然语言查询
 - **复杂查询处理**：支持排名、趋势、对比等复杂分析
 - **RAG增强查询**：结合RAG上下文提高查询精确度
-
-**v2.1.0 核心亮点**：
 - **零配置智能查询**：自动提取数据库元数据，无需手动配置即可进行自然语言查询
 - **意图识别与SQL生成**：基于元数据理解用户问题，自动生成并执行SQL
 - **完整元数据管理**：自动提取表结构、列信息、业务含义、表关系等
@@ -20,8 +18,6 @@
 **Core Value**: Any Agent (including AI IDE) can implement NLP2SQL capabilities through this skill, without defining Agent+RAG within MindsDB EDIT. The combination of external Agent+SKILL+MindsDB greatly improves efficiency and versatility.
 
 ---
-
-## 新增功能 | What's New (v2.2.0)
 
 ### 🧠 LLM智能分析工作流
 
