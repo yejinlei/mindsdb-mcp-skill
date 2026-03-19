@@ -1,15 +1,13 @@
 ---
 name: mindsdb-mcp-skill
-description: MindsDB MCP服务器交互技能，采用三模块架构（db_connector、workflow_rag_build、workflow_rag_analysis），支持通过自然语言查询和操作200+企业级数据源，提供RAG知识库构建、NLP2SQL转换、智能数据分析和元数据自动提取能力。
-version: 2.1.0
+description: MindsDB MCP服务器交互技能，采用三模块架构，支持通过自然语言查询和操作200+企业级数据源，提供RAG知识库构建、NLP2SQL转换、智能数据分析和元数据自动提取能力。当用户需要查询数据库、分析数据、构建知识库或进行自然语言到SQL转换时，务必使用此技能。 | MindsDB MCP server interaction skill with three-module architecture, supporting natural language query and operation of 200+ enterprise data sources, providing RAG knowledge base construction, NLP2SQL conversion, intelligent data analysis, and metadata auto-extraction capabilities. Be sure to use this skill when users need to query databases, analyze data, build knowledge bases, or perform natural language to SQL conversion.
+version: 2.2.0
 author: yejinlei
 ---
 
 # MindsDB MCP Skill | MindsDB MCP Skill
 
 基于 MindsDB MCP 协议的通用数据库交互技能，采用**三模块架构**设计，支持自然语言操作各类数据源，自动适配本地/远程 MindsDB 部署，无需修改技能代码即可兼容所有 MindsDB 支持的数据库。
-
-**v2.1.0 新增功能**：元数据自动提取与智能查询，支持自动理解数据库结构，实现零配置智能问答。
 
 A universal database interaction skill based on the MindsDB MCP protocol, featuring a **three-module architecture**, supporting natural language operations on various data sources, automatically adapting to local/remote MindsDB deployments, and compatible with all MindsDB-supported databases without modifying skill code.
 
@@ -31,82 +29,17 @@ A universal database interaction skill based on the MindsDB MCP protocol, featur
   - 本地RAG系统初始化（ChromaDB + all-MiniLM-L6-v2）
   - 知识库管理（创建、列表、删除）
   - 数据字典管理（获取、搜索、刷新）
-  - **元数据自动提取**（新增）：自动从数据库提取表结构、列信息、业务含义
+  - 元数据自动提取：自动从数据库提取表结构、列信息、业务含义
   - 数据持久化管理
 
 ### 模块3：workflow_rag_analysis（基于RAG的NLP2SQL和数据分析工作流）
 - **职责**：利用RAG进行智能数据分析和查询
 - **功能**：
   - 自然语言到SQL转换（NLP2SQL）
-  - **智能查询引擎**（新增）：基于元数据理解用户意图，自动生成SQL
+  - 智能查询引擎：基于元数据理解用户意图，自动生成SQL
   - 智能数据分析
   - 知识库智能问答
   - AI模型创建与预测
-
-## 新增功能 | New Features (v2.1.0)
-
-### 1. 元数据自动提取 (metadata_extractor.py)
-
-**功能说明**：
-- 自动从DuckDB数据库提取完整的元数据信息
-- 智能推断表和列的业务含义
-- 自动检测表之间的关系（外键关联）
-- 推断业务域并分组
-
-**提取内容**：
-| 元数据类型 | 包含信息 |
-|-----------|---------|
-| 表级元数据 | 表名、行数、业务含义、标签、样本数据 |
-| 列级元数据 | 列名、数据类型、业务含义、主外键、样本值 |
-| 关系元数据 | 表间关联关系、外键检测 |
-| 业务域元数据 | 按业务主题分组的表集合 |
-
-**使用示例**：
-```python
-from scripts.metadata_extractor import extract_metadata_from_duckdb
-
-# 一键提取元数据
-data_dict, stats = extract_metadata_from_duckdb(
-    db_path="path/to/database.duckdb",
-    save_path="path/to/metadata.json"
-)
-
-# 查看提取结果
-print(data_dict.generate_summary())
-```
-
-### 2. 智能查询引擎 (intelligent_query.py)
-
-**功能说明**：
-- 基于元数据理解用户自然语言问题
-- 自动识别查询意图（计数、列表、统计、详情）
-- 智能匹配相关表和字段
-- 自动生成并执行SQL查询
-
-**工作流程**：
-```
-用户问题 → 意图识别 → 关键词提取 → 表/字段匹配 → SQL生成 → 执行查询 → 返回结果
-```
-
-**使用示例**：
-```python
-from scripts.intelligent_query import IntelligentQueryEngine
-
-# 初始化引擎
-engine = IntelligentQueryEngine(db_path)
-
-# 自然语言查询
-result = engine.query("总共几个部门")
-# 自动输出：意图(count) → 匹配表(odw_department) → SQL(SELECT COUNT(*)) → 结果(168)
-```
-
-**支持的查询类型**：
-| 查询类型 | 示例问题 | 自动生成的SQL |
-|---------|---------|--------------|
-| 计数查询 | "总共几个部门" | `SELECT COUNT(*) FROM odw_department` |
-| 列表查询 | "有哪些项目" | `SELECT DISTINCT project_name FROM odw_project` |
-| 统计查询 | "各部门人数分布" | `SELECT dept, COUNT(*) FROM ... GROUP BY ...` |
-| 详情查询 | "项目进度如何" | `SELECT * FROM odw_project LIMIT 10` |
 
 ## 技能用途 | Skill Purpose
 
@@ -140,11 +73,12 @@ result = engine.query("总共几个部门")
 pip install requests
 ```
 
-#### 元数据提取依赖 | Metadata Extraction Dependencies
+#### 元数据提取（示例）| Metadata Extraction (Example)
 
-元数据自动提取功能需要以下依赖：
+元数据自动提取功能以DuckDB为例，实际使用时无需安装duckdb：
 ```bash
-pip install duckdb
+# 示例：如果需要使用DuckDB作为数据源
+# pip install duckdb
 ```
 
 #### MindsDB自动安装与启动 | MindsDB Automatic Installation and Startup
@@ -183,7 +117,7 @@ python -m mindsdb
 ```python
 from scripts.metadata_extractor import extract_metadata_from_duckdb
 
-# 提取DuckDB数据库元数据
+# 提取数据库元数据（以DuckDB为例）
 data_dict, stats = extract_metadata_from_duckdb(
     db_path="data/weekly_report_warehouse.duckdb",
     save_path="data/metadata.json"
@@ -203,7 +137,7 @@ print(data_dict.generate_summary())
 ```python
 from scripts.intelligent_query import IntelligentQueryEngine
 
-# 初始化引擎（自动加载或提取元数据）
+# 初始化引擎（自动加载或提取元数据，以DuckDB为例）
 engine = IntelligentQueryEngine(
     db_path="data/weekly_report_warehouse.duckdb"
 )
@@ -225,7 +159,7 @@ from scripts.db_connector import get_db_connector
 # 获取数据库连接器
 db = get_db_connector()
 
-# 连接DuckDB数据库
+# 连接数据库（以DuckDB为例）
 result = db.connect_database(
     db_type="duckdb",
     db_path="data/weekly_report_warehouse.duckdb",
@@ -248,7 +182,7 @@ params = {
     "action": "create_kb",
     "kb_name": "weekly_report_kb",
     "database": "warehouse_db",
-    "extract_metadata": True  # 新增：自动提取元数据
+    "extract_metadata": True
 }
 result = rag_build_workflow_entry(params)
 print(result)
@@ -334,7 +268,7 @@ print("知识库查询结果:", query_result)
 | get_data_dict_summary | 无 | 获取数据字典摘要信息 |
 | search_data_dict | keyword | 搜索数据字典中的元数据 |
 | refresh_data_dict | database | 刷新指定数据库的数据字典 |
-| extract_metadata | database | 提取指定数据库的元数据（新增） |
+| extract_metadata | database | 提取指定数据库的元数据 |
 
 ### 模块3：workflow_rag_analysis（RAG分析工作流）
 
@@ -347,18 +281,18 @@ print("知识库查询结果:", query_result)
 | exec_sql | database, sql | 执行自定义SQL语句 |
 | analyze_data | database, nl_text | 对数据进行自然语言驱动的智能分析 |
 | query_kb | kb_name, nl_text | 向知识库发送自然语言查询 |
-| intelligent_query | database, nl_text | 智能查询（基于元数据）（新增） |
+| intelligent_query | database, nl_text | 智能查询（基于元数据） |
 | create_model | model_name, predict_field | 创建AI预测模型 |
 
-### 新增模块：metadata_extractor（元数据提取模块）
+### 模块4：metadata_extractor（元数据提取模块）
 
 | 方法 | 必传参数 | 功能说明 |
 |------|---------|----------|
-| extract_from_duckdb | db_path | 从DuckDB提取完整元数据 |
+| extract_from_duckdb | db_path | 从数据库提取完整元数据（以DuckDB为例） |
 | get_extraction_stats | 无 | 获取提取统计信息 |
 | save_to_file | file_path | 保存数据字典到文件 |
 
-### 新增模块：intelligent_query（智能查询模块）
+### 模块5：intelligent_query（智能查询模块）
 
 | 方法 | 必传参数 | 功能说明 |
 |------|---------|----------|
@@ -392,7 +326,7 @@ print("知识库查询结果:", query_result)
 - **-8**：未知异常
 - **-9**：MindsDB服务未就绪
 - **-10**：本地RAG初始化失败
-- **-11**：元数据提取失败（新增）
+- **-11**：元数据提取失败
 
 ## 注意事项 | Notes
 
@@ -401,8 +335,8 @@ print("知识库查询结果:", query_result)
 - 首次使用本地RAG时会自动下载all-MiniLM-L6-v2模型（约80MB），优先从国内源下载
 - 本地RAG使用ChromaDB持久化存储，数据保存在`data/chromadb_persist`目录
 - 数据字典自动持久化到`data/data_dictionary.json`文件
-- **元数据自动提取**功能仅支持DuckDB数据库，其他数据库需要手动配置元数据
-- **智能查询引擎**依赖元数据，首次使用会自动提取并缓存
+- 元数据自动提取功能以DuckDB为例，其他数据库需要手动配置元数据
+- 智能查询引擎依赖元数据，首次使用会自动提取并缓存
 
 ## 项目结构 | Project Structure
 
@@ -413,9 +347,9 @@ mindsdb-mcp-skill/
 │   ├── workflow_rag_build.py     # 工作流1：本地RAG构建与管理
 │   ├── workflow_rag_analysis.py  # 工作流2：基于RAG的NLP2SQL和数据分析
 │   ├── data_dictionary.py        # 数据字典实现
-│   ├── metadata_extractor.py     # 元数据自动提取模块（新增v2.1.0）
-│   ├── intelligent_query.py      # 智能查询引擎（新增v2.1.0）
-│   └── mindsdb_skill.py          # 原核心技能代码（保留兼容）
+│   ├── metadata_extractor.py     # 元数据自动提取模块
+│   ├── intelligent_query.py      # 智能查询引擎
+│   └── mindsdb_skill.py          # 核心技能代码
 ├── evals/
 │   └── evals.json                # 测试用例
 ├── data/
@@ -426,14 +360,3 @@ mindsdb-mcp-skill/
 ├── SKILL.md                      # 技能定义文件
 └── mcp.json                      # MCP配置文件
 ```
-
-## 版本历史 | Version History
-
-- **v2.1.0** (2026-03-19)：新增元数据自动提取与智能查询功能
-  - 新增metadata_extractor模块，支持自动提取数据库元数据
-  - 新增intelligent_query模块，支持基于元数据的智能查询
-  - 优化RAG知识库构建流程，自动包含元数据
-  
-- **v2.0.0** (2026-03-19)：重构为三模块架构（db_connector、workflow_rag_build、workflow_rag_analysis）
-
-- **v1.2.0**：原单模块架构版本
