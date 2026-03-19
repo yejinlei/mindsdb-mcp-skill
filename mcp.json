@@ -1,8 +1,8 @@
 {
   "mcpVersion": "0.1",  // MCP 协议版本 | MCP Protocol Version
   "name": "mindsdb-mcp-skill",  // Skill 名称（与核心源码一致）| Skill Name (Consistent with Core Source Code)
-  "version": "1.1.0",  // Skill 版本 | Skill Version
-  "description": "MindsDB MCP 服务器交互技能，支持通过自然语言查询和操作200+企业级数据源 | MindsDB MCP Server Interaction Skill, supporting natural language queries and operations on 200+ enterprise-level data sources",
+  "version": "2.2.0",  // Skill 版本 | Skill Version
+  "description": "MindsDB MCP 服务器交互技能，采用三模块架构，支持RAG知识库构建、NLP2SQL转换、智能数据分析和元数据自动提取，新增LLM智能分析工作流，支持中英文双语查询 | MindsDB MCP Server Interaction Skill with three-module architecture, supporting RAG knowledge base construction, NLP2SQL conversion, intelligent data analysis, and metadata auto-extraction, newly added LLM intelligent analysis workflow, supporting both Chinese and English queries",
   "entry": "python",  // 执行入口语言 | Execution Entry Language
   "args": ["scripts/mindsdb_skill.py"],  // 核心源码路径 | Core Source Code Path
   "env": {

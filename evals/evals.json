@@ -1,6 +1,6 @@
 {
   "skill_name": "mindsdb-mcp-skill",
-  "version": "2.0",
+  "version": "2.2",
   "architecture": "three-module",
   "modules": {
     "db_connector": "公共数据库连接模块",
@@ -243,6 +243,78 @@
       "params": {
         "database": "warehouse_db",
         "nl_text": "分析周报数据，找出最常见的问题类型"
+      }
+    },
+    {
+      "id": 21,
+      "module": "workflow_rag_analysis",
+      "workflow": "llm_analysis",
+      "prompt": "按工作量给部门负责人排名",
+      "expected_output": "应该识别意图为排名查询，生成SQL并执行，返回部门负责人工作量排名",
+      "action": "nl_query",
+      "params": {
+        "database": "warehouse_db",
+        "nl_text": "按工作量给部门负责人排名"
+      }
+    },
+    {
+      "id": 22,
+      "module": "workflow_rag_analysis",
+      "workflow": "llm_analysis",
+      "prompt": "周报中总共涉及了多少人",
+      "expected_output": "应该识别意图为计数查询，生成SQL并执行，返回周报中涉及的总人数",
+      "action": "nl_query",
+      "params": {
+        "database": "warehouse_db",
+        "nl_text": "周报中总共涉及了多少人"
+      }
+    },
+    {
+      "id": 23,
+      "module": "workflow_rag_analysis",
+      "workflow": "llm_analysis",
+      "prompt": "各部门财务收支情况对比",
+      "expected_output": "应该识别意图为对比分析，生成SQL并执行，返回各部门财务收支对比",
+      "action": "nl_query",
+      "params": {
+        "database": "warehouse_db",
+        "nl_text": "各部门财务收支情况对比"
+      }
+    },
+    {
+      "id": 24,
+      "module": "workflow_rag_analysis",
+      "workflow": "llm_analysis",
+      "prompt": "How many departments are there in total?",
+      "expected_output": "应该识别英文查询，意图为计数查询，生成SQL并执行，返回部门总数",
+      "action": "nl_query",
+      "params": {
+        "database": "warehouse_db",
+        "nl_text": "How many departments are there in total?"
+      }
+    },
+    {
+      "id": 25,
+      "module": "workflow_rag_analysis",
+      "workflow": "llm_analysis",
+      "prompt": "Rank department heads by workload",
+      "expected_output": "应该识别英文查询，意图为排名查询，生成SQL并执行，返回部门负责人工作量排名",
+      "action": "nl_query",
+      "params": {
+        "database": "warehouse_db",
+        "nl_text": "Rank department heads by workload"
+      }
+    },
+    {
+      "id": 26,
+      "module": "workflow_rag_analysis",
+      "workflow": "llm_analysis",
+      "prompt": "What projects are in progress?",
+      "expected_output": "应该识别英文查询，意图为列表查询，生成SQL并执行，返回正在进行的项目列表",
+      "action": "nl_query",
+      "params": {
+        "database": "warehouse_db",
+        "nl_text": "What projects are in progress?"
       }
     }
   ]

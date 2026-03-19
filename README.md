@@ -1,8 +1,14 @@
-# MindsDB MCP Skill v2.1
+# MindsDB MCP Skill v2.2
 
 ## 项目简介 | Project Introduction
 
 基于MindsDB MCP接口开发的Python技能包，采用**三模块架构**设计，支持RAG知识库全流程操作、NLP2SQL自然语言查询、智能数据分析、**元数据自动提取**和**智能查询引擎**等功能，可直接集成到Agent系统，实现数据源与RAG知识库的一站式管理。
+
+**v2.2.0 核心亮点**：
+- **LLM智能分析工作流**：利用Agent内置LLM能力进行意图理解和智能分析
+- **中英文双语支持**：支持中文和英文自然语言查询
+- **复杂查询处理**：支持排名、趋势、对比等复杂分析
+- **RAG增强查询**：结合RAG上下文提高查询精确度
 
 **v2.1.0 核心亮点**：
 - **零配置智能查询**：自动提取数据库元数据，无需手动配置即可进行自然语言查询
@@ -15,7 +21,34 @@
 
 ---
 
-## 新增功能 | What's New (v2.1.0)
+## 新增功能 | What's New (v2.2.0)
+
+### 🧠 LLM智能分析工作流
+
+**功能亮点**：
+- ✅ 利用Agent内置LLM能力进行智能分析
+- ✅ 支持中英文双语自然语言查询
+- ✅ 自动识别6种查询意图类型
+- ✅ 智能提取表名、列名等实体
+- ✅ 自动推理表间关系
+- ✅ 生成精准SQL查询
+- ✅ 提供智能结果分析和业务洞察
+
+**工作流程**：
+1. **意图理解**：识别查询意图（计数、列表、统计、趋势、对比、详情）
+2. **实体提取**：从问题中提取表名、列名等关键实体
+3. **表关系推理**：基于元数据和RAG结果推理表间关系
+4. **SQL生成**：根据意图和实体生成DuckDB兼容的SQL
+5. **结果分析**：提取业务洞察，给出可操作建议
+
+**双语查询示例**：
+| 中文查询 | 英文查询 | 意图类型 |
+|---------|---------|----------|
+| "总共有多少个部门" | "How many departments are there?" | count |
+| "有哪些项目正在进行" | "What projects are in progress?" | list |
+| "各部门人员分布统计" | "Statistics of personnel by department" | statistics |
+| "按工作量给部门排名" | "Rank departments by workload" | compare |
+| "项目A的详细信息" | "Detailed information about Project A" | detail |
 
 ### 🚀 元数据自动提取 (metadata_extractor.py)
 
@@ -96,11 +129,12 @@ print(f"结果: {result['data']}")
 - **功能**：
   - 自然语言到SQL转换（NLP2SQL）
   - **智能查询引擎**（v2.1.0新增）：基于元数据理解用户意图
+  - **LLM智能分析**（v2.2.0新增）：利用Agent内置LLM能力进行深度分析
   - 智能数据分析
   - 知识库智能问答
   - AI模型创建与预测
 
-### 新增模块（v2.1.0）
+### 新增模块
 
 | 模块 | 文件 | 功能 |
 |------|------|------|
@@ -128,6 +162,9 @@ This skill package is centered around RAG (Retrieval-Augmented Generation), enca
 
 - **智能查询引擎**（v2.1.0新增）：基于元数据理解用户自然语言问题，自动识别意图，生成并执行SQL查询。
   **Intelligent Query Engine** (v2.1.0 New): Understand user natural language questions based on metadata, automatically identify intent, generate and execute SQL queries.
+
+- **LLM智能分析工作流**（v2.2.0新增）：利用Agent内置LLM能力进行深度意图理解和智能分析，支持中英文双语查询。
+  **LLM-Powered Intelligent Analysis Workflow** (v2.2.0 New): Utilize Agent's built-in LLM capabilities for deep intent understanding and intelligent analysis, supporting both Chinese and English queries.
 
 - **数据源管理**：连接多类型数据源（MySQL、DuckDB、TDengine等）、列出所有数据源、查看数据表结构。
   **Data Source Management**: Connect multiple types of data sources (MySQL, DuckDB, TDengine, etc.), list all data sources, view data table structures.
@@ -237,7 +274,7 @@ mindsdb-mcp-skill/
 └── mcp.json                      # MCP配置文件
 ```
 
-### 3.2 新增功能快速开始 | 3.2 Quick Start for New Features (v2.1.0)
+### 3.2 新增功能快速开始 | 3.2 Quick Start for New Features
 
 #### 元数据自动提取 | Metadata Auto-Extraction
 
@@ -287,6 +324,21 @@ print(f"结果: {result['data']}")
 # 关闭连接
 engine.close()
 ```
+
+#### LLM智能分析工作流 | LLM-Powered Intelligent Analysis Workflow
+
+**使用方式**：直接通过Agent向技能发送自然语言查询，技能会自动利用Agent的LLM能力进行智能分析。
+
+**示例查询**：
+- 中文："按工作量给部门负责人排名"
+- 英文："Rank department heads by workload"
+
+**处理流程**：
+1. Agent识别意图为 `compare` + `rank`
+2. 提取实体：部门负责人(`leader_name`)、工作量(项目数量)
+3. 推理表关系：`odw_department` JOIN `odw_project`
+4. 生成SQL并执行
+5. 分析结果，提供业务洞察
 
 ### 3.3 基础调用示例 | 3.3 Basic Call Examples
 
@@ -432,7 +484,7 @@ print("删除知识库结果：", json.dumps(delete_result, ensure_ascii=False, 
 | query_kb | kb_name, nl_text | top_k, threshold | 向知识库发送自然语言查询 |
 | create_model | model_name, predict_field | database | 创建AI预测模型 |
 
-### 4.4 新增模块（v2.1.0） | 4.4 New Modules (v2.1.0)
+### 4.4 新增模块 | 4.4 New Modules
 
 #### 元数据提取模块 (metadata_extractor.py)
 
@@ -502,8 +554,8 @@ All operation return results are in a unified JSON format for easy Agent parsing
 - **-10**：本地RAG初始化失败
   -10: Local RAG initialization failed
 
-- **-11**：元数据提取失败（v2.1.0新增）
-  -11: Metadata extraction failed (v2.1.0 New)
+- **-11**：元数据提取失败
+  -11: Metadata extraction failed
 
 ---
 
@@ -530,15 +582,25 @@ All operation return results are in a unified JSON format for easy Agent parsing
   - Local RAG uses ChromaDB persistent storage, data is saved in the `data/chromadb_persist` directory
   - Data dictionary is automatically persisted to the `data/data_dictionary.json` file
 
-- **元数据自动提取注意事项**（v2.1.0新增）：
+- **元数据自动提取注意事项**：
   - 目前仅支持DuckDB数据库的元数据自动提取
   - 首次使用智能查询引擎时会自动提取并缓存元数据
   - 元数据文件默认保存在数据库同目录，文件名格式：`{database_name}_metadata.json`
   
-  **Metadata Auto-Extraction Notes** (v2.1.0 New):
+  **Metadata Auto-Extraction Notes**:
   - Currently only supports automatic metadata extraction for DuckDB databases
   - Metadata will be automatically extracted and cached on first use of the intelligent query engine
   - Metadata files are saved in the same directory as the database by default, with filename format: `{database_name}_metadata.json`
+
+- **LLM智能分析注意事项**（v2.2.0新增）：
+  - 依赖Agent环境的LLM能力，无需额外配置
+  - 支持中英文双语查询，会自动识别语言
+  - 复杂查询会结合RAG检索提高精确度
+  
+  **LLM Intelligent Analysis Notes** (v2.2.0 New):
+  - Depends on the LLM capabilities of the Agent environment, no additional configuration required
+  - Supports both Chinese and English queries, automatically recognizes language
+  - Complex queries will use RAG retrieval to improve accuracy
 
 - 测试代码位于各模块文件末尾，可直接运行，需提前修改配置中的数据源信息。
   The test code is located at the end of each module file and can be run directly, but you need to modify the data source information in the configuration in advance.
@@ -554,8 +616,8 @@ All operation return results are in a unified JSON format for easy Agent parsing
   - db_connector模块：`from scripts.db_connector import get_db_connector`
   - RAG构建工作流：`from scripts.workflow_rag_build import rag_build_workflow_entry`
   - RAG分析工作流：`from scripts.workflow_rag_analysis import rag_analysis_workflow_entry`
-  - **元数据提取模块**（v2.1.0新增）：`from scripts.metadata_extractor import extract_metadata_from_duckdb`
-  - **智能查询引擎**（v2.1.0新增）：`from scripts.intelligent_query import IntelligentQueryEngine`
+  - **元数据提取模块**：`from scripts.metadata_extractor import extract_metadata_from_duckdb`
+  - **智能查询引擎**：`from scripts.intelligent_query import IntelligentQueryEngine`
 
 - 支持扩展更多MCP接口操作，可在各模块中添加新的action逻辑。
   Supports extending more MCP interface operations; new action logic can be added in each module.
@@ -563,6 +625,26 @@ All operation return results are in a unified JSON format for easy Agent parsing
 ---
 
 ## 八、版本历史 | VIII. Version History
+
+- **v2.2.0** (2026-03-19)：新增LLM智能分析工作流
+  - 利用Agent内置LLM能力进行智能分析
+  - 支持中英文双语自然语言查询
+  - 自动识别6种查询意图类型
+  - 智能提取表名、列名等实体
+  - 自动推理表间关系
+  - 生成精准SQL查询
+  - 提供智能结果分析和业务洞察
+  - 集成RAG增强查询能力
+  
+  **v2.2.0** (2026-03-19): Added LLM intelligent analysis workflow
+  - Utilize Agent's built-in LLM capabilities for intelligent analysis
+  - Support both Chinese and English natural language queries
+  - Automatically identify 6 query intent types
+  - Intelligently extract table names, column names and other entities
+  - Automatically infer table relationships
+  - Generate precise SQL queries
+  - Provide intelligent result analysis and business insights
+  - Integrate RAG-enhanced query capabilities
 
 - **v2.1.0** (2026-03-19)：新增元数据自动提取与智能查询功能
   - 新增metadata_extractor模块，支持自动提取数据库元数据
