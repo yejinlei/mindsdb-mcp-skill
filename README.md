@@ -1,4 +1,4 @@
-# MindsDB MCP Skill v2.2
+# MindsDB MCP Skill v2.3
 
 ## 项目简介 | Project Introduction
 
@@ -462,9 +462,22 @@ print("删除知识库结果：", json.dumps(delete_result, ensure_ascii=False, 
 
 ### 4.2 模块2：workflow_rag_build（RAG构建工作流） | 4.2 Module 2: workflow_rag_build (RAG Build Workflow)
 
+**技术原理**：
+1. **初始化阶段**：检查MindsDB RAG可用性，若不可用则自动切换到本地RAG（ChromaDB + all-MiniLM-L6-v2）
+2. **元数据提取**：当设置`extract_metadata: True`时，自动从数据库提取完整元数据，包括表结构、列信息、业务含义和表间关系
+3. **知识库构建**：基于提取的元数据和数据库内容构建向量知识库
+4. **数据持久化**：将知识库和数据字典持久化到本地存储，确保后续查询无需重新构建
+
+**构建流程**：
+```
+┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  初始化RAG系统   │────>│  元数据自动提取   │────>│  构建向量知识库   │────>│  数据持久化存储   │
+└─────────────────┘     └──────────────────┘     └──────────────────┘     └──────────────────┘
+```
+
 | 动作（action） | 必传参数 | 可选参数 | 功能说明 |
 |---------------|---------|---------|----------|
-| create_kb | kb_name | database, top_k, threshold | 创建RAG知识库，自动提取数据库元数据 |
+| create_kb | kb_name | database, top_k, threshold, extract_metadata | 创建RAG知识库，自动提取数据库元数据 |
 | list_kb | 无 | 无 | 列出所有已创建的RAG知识库 |
 | delete_kb | kb_name | 无 | 删除指定名称的RAG知识库 |
 | get_data_dict_summary | 无 | 无 | 获取数据字典摘要信息 |
@@ -625,6 +638,18 @@ All operation return results are in a unified JSON format for easy Agent parsing
 ---
 
 ## 八、版本历史 | VIII. Version History
+
+- **v2.3.0** (2026-03-19)：优化SKILL.md描述，添加英文支持
+  - 优化SKILL.md的description字段，使其更"主动"
+  - 添加英文描述，方便国外客户使用
+  - 保持中英文描述的一致性
+  - 明确DuckDB为示例，而非依赖
+  
+  **v2.3.0** (2026-03-19): Optimized SKILL.md description, added English support
+  - Optimized the description field in SKILL.md to be more "proactive"
+  - Added English description for international users
+  - Maintained consistency between Chinese and English descriptions
+  - Clarified that DuckDB is an example, not a dependency
 
 - **v2.2.0** (2026-03-19)：新增LLM智能分析工作流
   - 利用Agent内置LLM能力进行智能分析
