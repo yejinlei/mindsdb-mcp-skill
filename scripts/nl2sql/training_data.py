@@ -82,7 +82,7 @@ class TrainingDataCollector:
         }
     
     def add_sql(self, database: str, sql: str, question: str,
-                tables: List[str] = None) -> Dict[str, Any]:
+                tables: List[str] = None, intent_tags: List[str] = None) -> Dict[str, Any]:
         """添加 SQL 示例训练数据
         
         Args:
@@ -90,6 +90,7 @@ class TrainingDataCollector:
             sql: SQL 语句
             question: 对应的自然语言问题
             tables: 涉及的表名列表
+            intent_tags: 意图标签列表（用于增强检索）
         
         Returns:
             添加结果
@@ -97,6 +98,8 @@ class TrainingDataCollector:
         content = f"数据库: {database}\n问题: {question}\nSQL:\n{sql}"
         if tables:
             content += f"\n涉及表: {', '.join(tables)}"
+        if intent_tags:
+            content += f"\n意图标签: {', '.join(intent_tags)}"
         
         data_id = self._generate_id(content)
         
@@ -107,6 +110,7 @@ class TrainingDataCollector:
             "sql": sql,
             "question": question,
             "tables": tables or [],
+            "intent_tags": intent_tags or [],
             "content": content,
             "created_at": datetime.now().isoformat()
         }
@@ -120,7 +124,8 @@ class TrainingDataCollector:
         }
     
     def add_documentation(self, database: str, content: str,
-                          title: str = None, source: str = None) -> Dict[str, Any]:
+                          title: str = None, source: str = None,
+                          intent_tags: List[str] = None) -> Dict[str, Any]:
         """添加文档训练数据
         
         Args:
@@ -128,6 +133,7 @@ class TrainingDataCollector:
             content: 文档内容
             title: 文档标题
             source: 文档来源
+            intent_tags: 意图标签列表（用于增强检索）
         
         Returns:
             添加结果
@@ -137,6 +143,8 @@ class TrainingDataCollector:
             doc_content += f"标题: {title}\n"
         if source:
             doc_content += f"来源: {source}\n"
+        if intent_tags:
+            doc_content += f"意图标签: {', '.join(intent_tags)}\n"
         doc_content += f"内容:\n{content}"
         
         data_id = self._generate_id(doc_content)
@@ -148,6 +156,7 @@ class TrainingDataCollector:
             "content": doc_content,
             "title": title,
             "source": source,
+            "intent_tags": intent_tags or [],
             "created_at": datetime.now().isoformat()
         }
         

@@ -4,6 +4,7 @@
 RAG 检索增强生成模块 - Vanna 风格
 基于训练数据检索，生成 SQL 查询
 支持 Agent LLM SQL 生成
+支持意图识别增强
 """
 
 import os
@@ -16,6 +17,7 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 from training_data import TrainingDataCollector, get_training_data_collector
+from intent_recognizer import IntentRecognizer, get_intent_recognizer, Intent, IntentType
 
 
 class RAGSQLGenerator:
@@ -48,17 +50,21 @@ class RAGSQLGenerator:
 ```sql
 """
 
-    def __init__(self, rag_workflow=None, training_collector: TrainingDataCollector = None):
+    def __init__(self, rag_workflow=None, training_collector: TrainingDataCollector = None,
+                 intent_recognizer: IntentRecognizer = None):
         """初始化生成器
         
         Args:
             rag_workflow: RAG 工作流实例
             training_collector: 训练数据收集器
+            intent_recognizer: 意图识别器
         """
         self.rag_workflow = rag_workflow
         self.training_collector = training_collector or get_training_data_collector(rag_workflow)
+        self.intent_recognizer = intent_recognizer or get_intent_recognizer()
         
         self.similarity_threshold = 0.3
+        self.use_intent_recognition = True
     
     def generate_sql_with_rag(self, nl_text: str, database: str,
                                schema_info: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -79,39 +85,64 @@ class RAGSQLGenerator:
             "context": {
                 "similar_sql": [],
                 "relevant_ddl": [],
-                "relevant_docs": []
+                "relevant_docs": [],
+                "intent": None
             },
             "method": None,
             "confidence": 0.0
         }
         
-        similar_sql = self._find_similar_sql(database, nl_text)
+        intent = None
+        if self.use_intent_recognition:
+            intent = self.intent_recognizer.recognize(nl_text)
+            result["context"]["intent"] = {
+                "type": intent.intent_type.value,
+                "target": intent.target,
+                "action": intent.action,
+                "entities": intent.entities,
+                "confidence": intent.confidence
+            }
+        
+        enhanced_text = intent.enhanced_text if intent else nl_text
+        
+        similar_sql = self._find_similar_sql(database, enhanced_text)
+        
+        if intent:
+            intent_tags = self._get_intent_tags(intent)
+            similar_sql = self._filter_by_intent_tags(similar_sql, intent_tags)
+        
         result["context"]["similar_sql"] = similar_sql
         
         if similar_sql and similar_sql[0].get("distance", 1) < 0.2:
             best_match = similar_sql[0]
             sql = self._adapt_sql(best_match.get("metadata", {}).get("sql", ""),
-                                  nl_text, schema_info)
+                                  nl_text, schema_info, intent)
             result["sql"] = sql
             result["method"] = "similar_sql_adaptation"
             result["confidence"] = 1.0 - best_match.get("distance", 0.5)
             return result
         
-        relevant_ddl = self._find_relevant_ddl(database, nl_text)
+        relevant_ddl = self._find_relevant_ddl(database, enhanced_text)
+        if intent:
+            suggested_tables = self.intent_recognizer.get_table_suggestions(intent)
+            relevant_ddl = self._merge_ddl_with_suggestions(relevant_ddl, suggested_tables, database)
         result["context"]["relevant_ddl"] = relevant_ddl
         
-        relevant_docs = self._find_relevant_docs(database, nl_text)
+        relevant_docs = self._find_relevant_docs(database, enhanced_text)
+        if intent:
+            intent_tags = self._get_intent_tags(intent)
+            relevant_docs = self._filter_by_intent_tags(relevant_docs, intent_tags)
         result["context"]["relevant_docs"] = relevant_docs
         
         if relevant_ddl or relevant_docs:
-            sql = self._generate_sql_from_context(nl_text, relevant_ddl, relevant_docs, schema_info)
+            sql = self._generate_sql_from_context(nl_text, relevant_ddl, relevant_docs, schema_info, intent)
             result["sql"] = sql
             result["method"] = "rag_enhanced_generation"
-            result["confidence"] = self._calculate_confidence(relevant_ddl, relevant_docs, similar_sql)
+            result["confidence"] = self._calculate_confidence(relevant_ddl, relevant_docs, similar_sql, intent)
             return result
         
         if schema_info:
-            sql = self._generate_sql_from_schema(nl_text, schema_info, database)
+            sql = self._generate_sql_from_schema(nl_text, schema_info, database, intent)
             result["sql"] = sql
             result["method"] = "schema_based_generation"
             result["confidence"] = 0.5
@@ -259,13 +290,56 @@ class RAGSQLGenerator:
             data_type=TrainingDataCollector.DATA_TYPE_DOC
         )
     
+    def _get_intent_tags(self, intent: Intent) -> List[str]:
+        """从意图中提取标签"""
+        tags = []
+        
+        tags.append(intent.intent_type.value)
+        
+        if intent.target:
+            tags.append(intent.target)
+        
+        for entity_name in intent.entities.keys():
+            tags.append(entity_name)
+        
+        return list(set(tags))
+    
+    def _filter_by_intent_tags(self, items: List[Dict[str, Any]], 
+                                intent_tags: List[str]) -> List[Dict[str, Any]]:
+        """根据意图标签过滤和排序结果"""
+        if not intent_tags or not items:
+            return items
+        
+        scored_items = []
+        for item in items:
+            score = item.get("distance", 0.5)
+            item_tags = item.get("metadata", {}).get("intent_tags", [])
+            
+            if item_tags:
+                tag_match_count = len(set(intent_tags) & set(item_tags))
+                if tag_match_count > 0:
+                    score -= tag_match_count * 0.1
+            
+            scored_items.append((score, item))
+        
+        scored_items.sort(key=lambda x: x[0])
+        
+        return [item for score, item in scored_items]
+    
     def _adapt_sql(self, template_sql: str, nl_text: str,
-                   schema_info: Dict[str, Any] = None) -> str:
+                   schema_info: Dict[str, Any] = None,
+                   intent: Intent = None) -> str:
         """适配 SQL 模板"""
         if not template_sql:
             return "SELECT 1"
         
         sql = template_sql
+        
+        if intent:
+            if intent.intent_type == IntentType.COUNT and "COUNT" not in sql.upper():
+                sql = re.sub(r"SELECT\s+.*?\s+FROM", "SELECT COUNT(*) FROM", sql, flags=re.IGNORECASE)
+            elif intent.intent_type == IntentType.AGGREGATE and "SUM" not in sql.upper() and "AVG" not in sql.upper():
+                sql = re.sub(r"SELECT\s+.*?\s+FROM", "SELECT SUM(*) FROM", sql, flags=re.IGNORECASE)
         
         conditions = self._extract_conditions_from_nl(nl_text)
         if conditions:
@@ -303,7 +377,8 @@ class RAGSQLGenerator:
     def _generate_sql_from_context(self, nl_text: str,
                                     relevant_ddl: List[Dict[str, Any]],
                                     relevant_docs: List[Dict[str, Any]],
-                                    schema_info: Dict[str, Any] = None) -> str:
+                                    schema_info: Dict[str, Any] = None,
+                                    intent: Intent = None) -> str:
         """基于上下文生成 SQL"""
         tables = self._extract_tables_from_ddl(relevant_ddl)
         
@@ -313,19 +388,28 @@ class RAGSQLGenerator:
         if not tables:
             return "SELECT 1"
         
-        target_table = self._select_best_table(nl_text, tables, relevant_ddl)
+        target_table = self._select_best_table(nl_text, tables, relevant_ddl, intent)
         
         columns = self._extract_columns_from_ddl(relevant_ddl, target_table)
         if not columns and schema_info:
             columns = [col.get("name") for col in schema_info.get("tables", {}).get(target_table, [])]
         
-        select_clause = self._build_select_clause(nl_text, columns)
+        select_clause = self._build_select_clause(nl_text, columns, intent)
         from_clause = f"FROM {target_table}"
         
         conditions = self._extract_conditions_from_nl(nl_text)
+        if intent and intent.filters:
+            for f in intent.filters:
+                if f["type"] == "exact":
+                    conditions.append(f"column = '{f['value']}'")
+                elif f["type"] == "contains":
+                    conditions.append(f"column LIKE '%{f['value']}%'")
+        
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         
-        sql = f"{select_clause} {from_clause} {where_clause} LIMIT 10"
+        limit_clause = self._build_limit_clause(nl_text, intent)
+        
+        sql = f"{select_clause} {from_clause} {where_clause} {limit_clause}"
         return sql
     
     def _extract_tables_from_ddl(self, relevant_ddl: List[Dict[str, Any]]) -> List[str]:
@@ -351,8 +435,15 @@ class RAGSQLGenerator:
         return list(set(columns))
     
     def _select_best_table(self, nl_text: str, tables: List[str],
-                           relevant_ddl: List[Dict[str, Any]]) -> str:
+                           relevant_ddl: List[Dict[str, Any]],
+                           intent: Intent = None) -> str:
         """选择最佳表"""
+        if intent:
+            suggested_tables = self.intent_recognizer.get_table_suggestions(intent)
+            for suggested in suggested_tables:
+                if suggested in tables:
+                    return suggested
+        
         if len(tables) == 1:
             return tables[0]
         
@@ -369,39 +460,102 @@ class RAGSQLGenerator:
         
         return tables[0]
     
-    def _build_select_clause(self, nl_text: str, columns: List[str]) -> str:
+    def _build_select_clause(self, nl_text: str, columns: List[str],
+                             intent: Intent = None) -> str:
         """构建 SELECT 子句"""
+        if intent:
+            if intent.intent_type == IntentType.COUNT:
+                return "SELECT COUNT(*)"
+            elif intent.intent_type == IntentType.AGGREGATE:
+                if "平均" in nl_text or "avg" in nl_text.lower():
+                    return "SELECT AVG(amount)" if "amount" in columns else "SELECT AVG(*)"
+                elif "最大" in nl_text or "max" in nl_text.lower():
+                    return "SELECT MAX(amount)" if "amount" in columns else "SELECT MAX(*)"
+                elif "最小" in nl_text or "min" in nl_text.lower():
+                    return "SELECT MIN(amount)" if "amount" in columns else "SELECT MIN(*)"
+                else:
+                    return "SELECT SUM(amount)" if "amount" in columns else "SELECT SUM(*)"
+        
         all_keywords = ["所有", "全部", "all", "*"]
         if any(kw in nl_text.lower() for kw in all_keywords):
             return "SELECT *"
         
         if columns:
+            if intent and intent.entities:
+                priority_cols = []
+                for term, field in intent.entities.items():
+                    if field in columns:
+                        priority_cols.append(field)
+                if priority_cols:
+                    other_cols = [c for c in columns[:5] if c not in priority_cols]
+                    display_cols = priority_cols + other_cols
+                    return f"SELECT {', '.join(display_cols[:5])}"
+            
             display_cols = columns[:5] if len(columns) > 5 else columns
             return f"SELECT {', '.join(display_cols)}"
         
         return "SELECT *"
     
+    def _build_limit_clause(self, nl_text: str, intent: Intent = None) -> str:
+        """构建 LIMIT 子句"""
+        if intent and intent.intent_type == IntentType.COUNT:
+            return ""
+        
+        if intent and intent.intent_type == IntentType.AGGREGATE:
+            return ""
+        
+        limit_match = re.search(r"前\s*(\d+)", nl_text)
+        if limit_match:
+            return f"LIMIT {limit_match.group(1)}"
+        
+        return "LIMIT 10"
+    
+    def _merge_ddl_with_suggestions(self, relevant_ddl: List[Dict[str, Any]],
+                                     suggested_tables: List[str],
+                                     database: str) -> List[Dict[str, Any]]:
+        """合并 DDL 和建议表"""
+        existing_tables = set()
+        for ddl in relevant_ddl:
+            metadata = ddl.get("metadata", {})
+            table = metadata.get("table")
+            if table:
+                existing_tables.add(table)
+        
+        for table in suggested_tables:
+            if table not in existing_tables:
+                relevant_ddl.append({
+                    "content": f"表: {table}",
+                    "metadata": {"table": table, "suggested": True}
+                })
+        
+        return relevant_ddl
+    
     def _generate_sql_from_schema(self, nl_text: str, schema_info: Dict[str, Any],
-                                   database: str) -> str:
+                                   database: str, intent: Intent = None) -> str:
         """基于 schema 生成 SQL（降级方案）"""
         tables = list(schema_info.get("tables", {}).keys())
         if not tables:
             return "SELECT 1"
         
-        target_table = self._select_best_table(nl_text, tables, [])
+        target_table = self._select_best_table(nl_text, tables, [], intent)
         columns = [col.get("name") for col in schema_info.get("tables", {}).get(target_table, [])]
         
-        select_clause = self._build_select_clause(nl_text, columns)
+        select_clause = self._build_select_clause(nl_text, columns, intent)
         conditions = self._extract_conditions_from_nl(nl_text)
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        limit_clause = self._build_limit_clause(nl_text, intent)
         
-        return f"{select_clause} FROM {target_table} {where_clause} LIMIT 10"
+        return f"{select_clause} FROM {target_table} {where_clause} {limit_clause}"
     
     def _calculate_confidence(self, relevant_ddl: List[Dict[str, Any]],
                                relevant_docs: List[Dict[str, Any]],
-                               similar_sql: List[Dict[str, Any]]) -> float:
+                               similar_sql: List[Dict[str, Any]],
+                               intent: Intent = None) -> float:
         """计算置信度"""
         confidence = 0.0
+        
+        if intent:
+            confidence += intent.confidence * 0.2
         
         if similar_sql:
             best_distance = similar_sql[0].get("distance", 1)
@@ -445,6 +599,7 @@ class RAGSQLGenerator:
         return "\n".join(context_parts)
 
 
-def get_rag_sql_generator(rag_workflow=None, training_collector=None) -> RAGSQLGenerator:
+def get_rag_sql_generator(rag_workflow=None, training_collector=None, 
+                          intent_recognizer=None) -> RAGSQLGenerator:
     """获取 RAG SQL 生成器实例"""
-    return RAGSQLGenerator(rag_workflow, training_collector)
+    return RAGSQLGenerator(rag_workflow, training_collector, intent_recognizer)

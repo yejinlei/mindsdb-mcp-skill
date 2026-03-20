@@ -495,6 +495,108 @@
         "database": "warehouse_db",
         "nl_text": "分析项目进度"
       }
+    },
+    {
+      "id": 41,
+      "module": "nl2sql",
+      "workflow": "intent_recognition",
+      "prompt": "测试意图识别：统计卡点数量",
+      "expected_output": "应该识别意图类型为 count，目标为卡点，实体映射为 issues",
+      "action": "test_intent",
+      "params": {
+        "action": "test_intent",
+        "nl_text": "统计卡点数量"
+      }
+    },
+    {
+      "id": 42,
+      "module": "nl2sql",
+      "workflow": "intent_recognition",
+      "prompt": "测试意图识别：查询所有项目",
+      "expected_output": "应该识别意图类型为 list，目标为项目",
+      "action": "test_intent",
+      "params": {
+        "action": "test_intent",
+        "nl_text": "查询所有项目"
+      }
+    },
+    {
+      "id": 43,
+      "module": "nl2sql",
+      "workflow": "schema_extraction",
+      "prompt": "自动提取 DuckDB 数据库的 Schema",
+      "expected_output": "应该提取所有表结构，推断业务术语映射",
+      "action": "extract_schema",
+      "params": {
+        "action": "extract_schema",
+        "db_type": "duckdb",
+        "db_path": "data/weekly_report_warehouse.duckdb",
+        "database": "warehouse_db"
+      }
+    },
+    {
+      "id": 44,
+      "module": "nl2sql",
+      "workflow": "training_config",
+      "prompt": "加载训练数据配置文件",
+      "expected_output": "应该成功加载 YAML 配置，返回加载统计",
+      "action": "load_training_config",
+      "params": {
+        "action": "load_training_config",
+        "config_path": "data/training_config.example.yaml"
+      }
+    },
+    {
+      "id": 45,
+      "module": "nl2sql",
+      "workflow": "hybrid_query",
+      "prompt": "混合查询：统计卡点数量（意图识别 + RAG）",
+      "expected_output": "应该结合意图识别和 RAG 检索生成准确的 SQL",
+      "action": "hybrid_query",
+      "params": {
+        "action": "hybrid_query",
+        "database": "warehouse_db",
+        "nl_text": "统计卡点数量"
+      }
+    },
+    {
+      "id": 46,
+      "module": "nl2sql",
+      "workflow": "hybrid_query",
+      "prompt": "混合查询：查询部门负责人",
+      "expected_output": "应该识别意图并生成正确的关联查询 SQL",
+      "action": "hybrid_query",
+      "params": {
+        "action": "hybrid_query",
+        "database": "warehouse_db",
+        "nl_text": "查询部门负责人"
+      }
+    },
+    {
+      "id": 47,
+      "module": "nl2sql",
+      "workflow": "rag_generation",
+      "prompt": "生成 SQL prompt 供 Agent LLM 使用",
+      "expected_output": "应该返回包含 prompt、context、instruction 的完整结果",
+      "action": "generate_sql_prompt",
+      "params": {
+        "action": "generate_sql_prompt",
+        "database": "warehouse_db",
+        "nl_text": "查询所有活跃项目"
+      }
+    },
+    {
+      "id": 48,
+      "module": "nl2sql",
+      "workflow": "business_terms",
+      "prompt": "动态添加业务术语映射",
+      "expected_output": "应该成功添加术语映射并可在后续查询中使用",
+      "action": "add_business_term",
+      "params": {
+        "action": "add_business_term",
+        "term": "订单",
+        "mappings": ["order", "order_id", "订单号"]
+      }
     }
   ]
 }

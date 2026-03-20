@@ -59,6 +59,47 @@ class RAGAnalysisWorkflow:
         
         # MindsDB AI 能力状态缓存
         self._mindsdb_ai_available = None
+        
+        # Schema 提取器
+        self._schema_extractor = None
+    
+    def _auto_extract_schema(self, db_type: str, db_path: str, database: str):
+        """自动提取 Schema 并注册业务术语
+        
+        Args:
+            db_type: 数据库类型
+            db_path: 数据库路径
+            database: 数据库名
+        """
+        try:
+            from nl2sql.schema_extractor import get_schema_extractor
+            from nl2sql.training_data import get_training_data_collector
+            from nl2sql.intent_recognizer import get_intent_recognizer
+            
+            if self._schema_extractor is None:
+                training_collector = get_training_data_collector(self)
+                intent_recognizer = get_intent_recognizer()
+                self._schema_extractor = get_schema_extractor(
+                    training_collector, intent_recognizer
+                )
+            
+            if db_type.lower() == "duckdb":
+                result = self._schema_extractor.extract_from_duckdb(db_path, database)
+            elif db_type.lower() == "sqlite":
+                result = self._schema_extractor.extract_from_sqlite(db_path, database)
+            else:
+                return
+            
+            if result.get("status") == "success":
+                print(f"[Schema 自动提取] 数据库: {database}")
+                print(f"  表数量: {len(result.get('tables', []))}")
+                print(f"  推断术语: {len(result.get('inferred_terms', {}))} 个")
+                
+                for term, fields in result.get("inferred_terms", {}).items():
+                    print(f"    '{term}' → {fields}")
+        
+        except Exception as e:
+            print(f"[Schema 自动提取] 失败: {e}")
     
     def check_mindsdb_installed(self) -> bool:
         """检查MindsDB是否已安装"""
@@ -776,6 +817,10 @@ class RAGAnalysisWorkflow:
                 username=params.get("username", self.default_username),
                 password=params.get("password", self.default_password)
             )
+            
+            if result.get("code") == 0 and db_path:
+                self._auto_extract_schema(db_type, db_path, database_name)
+            
             return result
         
         elif action == "list_databases":

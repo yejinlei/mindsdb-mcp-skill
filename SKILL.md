@@ -484,14 +484,134 @@ mindsdb-mcp-skill/
 │   ├── data_dictionary.py        # 数据字典实现
 │   ├── metadata_extractor.py     # 元数据自动提取模块
 │   ├── intelligent_query.py      # 智能查询引擎
-│   └── mindsdb_skill.py          # 核心技能代码
+│   ├── mindsdb_skill.py          # 核心技能代码
+│   └── nl2sql/                   # NL2SQL 核心模块
+│       ├── engine.py             # NL2SQL 引擎
+│       ├── intent_recognizer.py  # 意图识别器
+│       ├── rag_generator.py      # RAG SQL 生成器
+│       ├── schema_extractor.py   # Schema 自动提取
+│       ├── training_data.py      # 训练数据管理
+│       └── training_config.py    # 训练配置加载
 ├── evals/
 │   └── evals.json                # 测试用例
 ├── data/
 │   ├── chromadb_persist/         # RAG向量数据持久化目录
-│   └── data_dictionary.json      # 数据字典持久化文件
+│   ├── data_dictionary.json      # 数据字典持久化文件
+│   └── training_data/            # 训练数据持久化目录
 ├── references/                   # 参考文档
 ├── README.md                     # 说明文档
 ├── SKILL.md                      # 技能定义文件
 └── mcp.json                      # MCP配置文件
+```
+
+## 高级功能 | Advanced Features
+
+### 意图识别增强 | Intent Recognition Enhancement
+
+本技能实现了意图识别模块，在 RAG 检索之前进行意图分析，提高 SQL 生成准确性：
+
+| 意图类型 | 说明 | 示例查询 |
+|----------|------|----------|
+| list | 列表查询 | "查询所有卡点" |
+| count | 计数查询 | "统计卡点数量" |
+| aggregate | 聚合查询 | "统计收入合计" |
+| compare | 对比查询 | "对比各部门收入" |
+| trend | 趋势查询 | "分析收入趋势" |
+| detail | 详情查询 | "查看项目详情" |
+
+**使用示例**：
+
+```python
+from scripts.nl2sql.intent_recognizer import get_intent_recognizer
+
+recognizer = get_intent_recognizer()
+intent = recognizer.recognize("统计卡点数量")
+
+print(f"意图类型: {intent.intent_type.value}")  # count
+print(f"目标: {intent.target}")                 # 卡点
+print(f"实体映射: {intent.entities}")           # {'卡点': 'issues'}
+```
+
+### 零配置 Schema 自动提取 | Zero-Config Schema Extraction
+
+连接数据库时自动提取表结构并推断业务术语映射，实现零配置使用：
+
+```python
+# 连接数据库时自动执行：
+# 1. 提取所有表结构 (DDL)
+# 2. 推断业务术语映射 (issues → 卡点, leader_name → 负责人)
+# 3. 自动注册到意图识别器
+# 4. 自动注册 DDL 训练数据
+
+from scripts.workflow_rag_analysis import rag_analysis_workflow_entry
+
+result = rag_analysis_workflow_entry({
+    "action": "connect_db",
+    "db_type": "duckdb",
+    "db_path": "/path/to/database.duckdb",
+    "database": "my_db"
+})
+# 自动完成 Schema 提取和术语推断
+```
+
+**自动推断规则示例**：
+
+| 字段名 | 推断术语 |
+|--------|----------|
+| issues | 卡点, 问题, 风险 |
+| leader_name | 负责人, 领导 |
+| finance_type | 资金流向, 资金类型 |
+| department | 部门 |
+| project | 项目 |
+
+### 训练数据配置文件 | Training Data Configuration
+
+支持通过 YAML 配置文件批量导入训练数据：
+
+```yaml
+# training_config.yaml
+database: warehouse_db
+
+business_terms:
+  卡点: [issues, 问题, 风险]
+  资金流向: [finance_type, 资金类型]
+  部门: [department, department_name]
+
+training_sql:
+  - question: "查询所有卡点"
+    sql: "SELECT issues FROM odw_weekly_report WHERE issues IS NOT NULL"
+    intent_tags: [list, 卡点]
+
+training_docs:
+  - title: "周报表说明"
+    content: "odw_weekly_report 表的 issues 字段存储卡点问题"
+    intent_tags: [卡点, 周报]
+```
+
+**加载配置**：
+
+```python
+from scripts.nl2sql.training_config import load_training_config
+from scripts.nl2sql.training_data import get_training_data_collector
+
+collector = get_training_data_collector()
+result = load_training_config('training_config.yaml', collector)
+# {'business_terms': 3, 'training_sql': 1, 'training_docs': 1, 'status': 'success'}
+```
+
+### 混合查询方案 | Hybrid Query Approach
+
+结合意图识别和 RAG 检索，提高查询准确率：
+
+```
+用户问题: "统计卡点数量"
+    ↓
+第一层：意图识别
+  → type: count, target: 卡点, entities: {卡点: issues}
+    ↓
+第二层：RAG 检索 + 意图标签过滤
+  → 检索相似 SQL，按意图标签排序
+    ↓
+第三层：SQL 生成
+  → SELECT COUNT(*) FROM odw_weekly_report WHERE issues IS NOT NULL
 ```
