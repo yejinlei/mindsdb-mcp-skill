@@ -24,7 +24,7 @@ wheels/
 venv/
 ENV/
 env/
-.venv
+.venv/
 
 # IDE
 .vscode/
@@ -46,22 +46,26 @@ logs/
 *.bak
 *.cache
 
+# Data files
+data/
+*.duckdb
+*.db
+*.sqlite
+*.sqlite3
+chromadb_persist/
+
+# Debug and test files
+check_*.py
+debug_*.py
+test_*.py
+intelligent_analysis.py
+SKILL_EVALUATION_REPORT.md
+
 # Test coverage
 htmlcov/
-
-# User data files (case studies, examples, etc.)
-*.mhtml
-*.html
-*.pdf
-*.docx
-*.xlsx
-case-studies/
-examples/
-user-data/
 .tox/
 .coverage
 .coverage.*
-.cache
 nosetests.xml
 coverage.xml
 *.cover

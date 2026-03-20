@@ -20,7 +20,7 @@
 import os
 import sys
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, date
 import re
 import json
 
@@ -105,7 +105,32 @@ except ImportError:
                 return True
             except Exception as e:
                 print(f"保存失败: {e}")
-                return False
+                # 尝试修复日期序列化问题
+                try:
+                    data = {
+                        'tables': self.tables,
+                        'columns': self.columns,
+                        'relationships': self.relationships,
+                        'business_metadata': self.business_metadata,
+                        'last_updated': datetime.now().isoformat()
+                    }
+                    # 递归转换日期类型
+                    def convert_dates(obj):
+                        if isinstance(obj, (datetime, date)):
+                            return obj.isoformat()
+                        elif isinstance(obj, dict):
+                            return {k: convert_dates(v) for k, v in obj.items()}
+                        elif isinstance(obj, list):
+                            return [convert_dates(item) for item in obj]
+                        else:
+                            return obj
+                    data = convert_dates(data)
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+                    return True
+                except Exception as e2:
+                    print(f"修复后保存仍然失败: {e2}")
+                    return False
 
 
 class MetadataExtractor:

@@ -166,12 +166,8 @@ class DatabaseWorkflow:
             "connect_db": ["db_type"],
             "list_databases": [],
             "show_table_schema": ["database"],
-            "describe_table": ["database", "table"],
             "nl_query": ["database", "nl_text"],
             "exec_sql": ["database", "sql"],
-            "test_connection": ["database"],
-            "get_datasource_info": ["database"],
-            "drop_database": ["database"],
             "get_data_dict_summary": [],
             "search_data_dict": ["keyword"],
             "refresh_data_dict": ["database"],
@@ -208,96 +204,19 @@ class DatabaseWorkflow:
                 database_name = params.get("database", "duck_db")
                 if db_path:
                     request_body = {
-                        "query": f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = 'duckdb', PARAMETERS = {{'database': '{db_path}'}}"
+                        "query": f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = 'duckdb', PARAMETERS = {{'db_file': '{db_path}'}}"
                     }
                 else:
                     request_body = {"query": f"CREATE DATABASE IF NOT EXISTS {database_name}"}
-            elif db_type == "tdengine":
-                # TDengine特殊处理
-                url = params.get("url", f"{params['host']}:{params['port']}")
-                token = params.get("token", "")
-                td_database = params.get("database", "")
-                username = params["username"]
-                password = params["password"]
-                database_name = params.get("database_name", f"{db_type}_db")
-                query = f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = 'tdengine', PARAMETERS = {{'url': '{url}', 'token': '{token}', 'database': '{td_database}', 'user': '{username}', 'password': '{password}'}}"
-                request_body = {"query": query}
-            elif db_type == "mysql":
-                # MySQL特殊处理
-                host = params["host"]
-                port = params["port"]
-                username = params["username"]
-                password = params["password"]
-                mysql_db = params.get("database", "")
-                database_name = params.get("database_name", f"{db_type}_db")
-                query = f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = 'mysql', PARAMETERS = {{'host': '{host}', 'port': {port}, 'user': '{username}', 'password': '{password}', 'database': '{mysql_db}'}}"
-                request_body = {"query": query}
-            elif db_type == "postgres":
-                # PostgreSQL特殊处理
-                host = params["host"]
-                port = params["port"]
-                username = params["username"]
-                password = params["password"]
-                pg_db = params.get("database", "")
-                database_name = params.get("database_name", f"{db_type}_db")
-                query = f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = 'postgres', PARAMETERS = {{'host': '{host}', 'port': {port}, 'user': '{username}', 'password': '{password}', 'database': '{pg_db}'}}"
-                request_body = {"query": query}
-            elif db_type == "mongodb":
-                # MongoDB特殊处理
-                connection_string = params.get("connection_string", f"mongodb://{params['username']}:{params['password']}@{params['host']}:{params['port']}")
-                database_name = params.get("database_name", f"{db_type}_db")
-                query = f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = 'mongodb', PARAMETERS = {{'connection_string': '{connection_string}'}}"
-                request_body = {"query": query}
-            elif db_type == "clickhouse":
-                # ClickHouse特殊处理
-                host = params["host"]
-                port = params["port"]
-                username = params["username"]
-                password = params["password"]
-                clickhouse_db = params.get("database", "default")
-                database_name = params.get("database_name", f"{db_type}_db")
-                query = f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = 'clickhouse', PARAMETERS = {{'host': '{host}', 'port': {port}, 'user': '{username}', 'password': '{password}', 'database': '{clickhouse_db}'}}"
-                request_body = {"query": query}
-            elif db_type == "snowflake":
-                # Snowflake特殊处理
-                account = params.get("account", "")
-                warehouse = params.get("warehouse", "")
-                snowflake_db = params.get("database", "")
-                schema = params.get("schema", "")
-                username = params["username"]
-                password = params["password"]
-                database_name = params.get("database_name", f"{db_type}_db")
-                query = f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = 'snowflake', PARAMETERS = {{'account': '{account}', 'user': '{username}', 'password': '{password}', 'warehouse': '{warehouse}', 'database': '{snowflake_db}', 'schema': '{schema}'}}"
-                request_body = {"query": query}
             else:
-                # 通用数据库 - 支持任意MindsDB兼容的数据库引擎
                 host = params["host"]
                 port = params["port"]
                 username = params["username"]
                 password = params["password"]
-                database_name = params.get("database_name", f"{db_type}_db")
-                
-                # 构建通用参数字典
-                params_dict = {
-                    'host': host,
-                    'port': port,
-                    'user': username,
-                    'password': password
+                database_name = params.get("database", f"{db_type}_db")
+                request_body = {
+                    "query": f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = '{db_type}', PARAMETERS = {{'host': '{host}', 'port': {port}, 'user': '{username}', 'password': '{password}'}}"
                 }
-                
-                # 添加数据库名称（如果提供）
-                if params.get("database"):
-                    params_dict['database'] = params.get("database")
-                
-                # 添加其他自定义参数
-                custom_params = params.get("params", {})
-                if isinstance(custom_params, dict):
-                    params_dict.update(custom_params)
-                
-                # 构建参数字符串
-                params_str = ', '.join([f"'{k}': '{v}'" for k, v in params_dict.items()])
-                query = f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = '{db_type}', PARAMETERS = {{{params_str}}}"
-                request_body = {"query": query}
         
         elif action == "list_databases":
             request_body = {"query": "SHOW DATABASES"}
@@ -305,25 +224,11 @@ class DatabaseWorkflow:
         elif action == "show_table_schema":
             request_body = {"query": f"SHOW TABLES FROM {database}"}
         
-        elif action == "describe_table":
-            table = params.get("table")
-            request_body = {"query": f"DESCRIBE {database}.{table}"}
-        
         elif action == "nl_query":
-            # 检查数据库是否支持NL查询
             request_body = {"query": f"SELECT * FROM {database}.nl_query('{nl_text}')"}
         
         elif action == "exec_sql":
             request_body = {"query": params["sql"]}
-        
-        elif action == "test_connection":
-            request_body = {"query": f"SELECT 1 FROM {database}.information_schema.tables LIMIT 1"}
-        
-        elif action == "get_datasource_info":
-            request_body = {"query": f"SHOW CREATE DATABASE {database}"}
-        
-        elif action == "drop_database":
-            request_body = {"query": f"DROP DATABASE IF EXISTS {database}"}
         
         return {"headers": headers, "body": request_body}
     
@@ -337,41 +242,35 @@ class DatabaseWorkflow:
             f"http://{host}:{port}/query"
         ]
     
-    def _send_http_api_request(self, mcp_request: Dict, host: str, port: int, timeout: int) -> Dict:
-        """发送HTTP API请求"""
-        # MindsDB HTTP API端点
-        api_url = f"http://{host}:{port}/api/sql/query"
+    def _send_mcp_request(self, mcp_request: Dict, mcp_paths: List[str], timeout: int) -> Dict:
+        """发送MCP请求"""
+        for mcp_url in mcp_paths:
+            try:
+                response = requests.post(
+                    url=mcp_url,
+                    headers=mcp_request["headers"],
+                    data=json.dumps(mcp_request["body"]),
+                    timeout=timeout
+                )
+                
+                if response.status_code == 200:
+                    try:
+                        response_data = response.json()
+                        if response_data.get("type") == "table":
+                            return self._generate_response(0, "success", {
+                                "data": response_data.get("data", []),
+                                "columns": response_data.get("column_names", [])
+                            })
+                        elif response_data.get("type") == "error":
+                            return self._generate_response(-4, response_data.get("error_message", "Request failed"))
+                        else:
+                            return self._generate_response(0, "success", response_data)
+                    except json.JSONDecodeError:
+                        continue
+            except Exception:
+                continue
         
-        try:
-            response = requests.post(
-                url=api_url,
-                headers=mcp_request["headers"],
-                json=mcp_request["body"],
-                timeout=timeout
-            )
-            
-            print(f"HTTP API请求: {api_url}")
-            print(f"状态码: {response.status_code}")
-            print(f"响应: {response.text[:500]}...")
-            
-            if response.status_code == 200:
-                try:
-                    response_data = response.json()
-                    if response_data.get("type") == "table":
-                        return self._generate_response(0, "success", {
-                            "data": response_data.get("data", []),
-                            "columns": response_data.get("column_names", [])
-                        })
-                    elif response_data.get("type") == "error":
-                        return self._generate_response(-4, response_data.get("error_message", "Request failed"))
-                    else:
-                        return self._generate_response(0, "success", response_data)
-                except json.JSONDecodeError:
-                    return self._generate_response(-5, "Invalid JSON response")
-            else:
-                return self._generate_response(-6, f"HTTP error: {response.status_code} - {response.text}")
-        except Exception as e:
-            return self._generate_response(-7, f"Request failed: {str(e)}")
+        return self._generate_response(-7, "All MCP paths failed")
     
     def _load_data_dictionary(self) -> bool:
         """加载持久化的数据字典"""
@@ -428,11 +327,12 @@ class DatabaseWorkflow:
                     "database": database
                 })
         
-        # 生成HTTP API请求
+        # 生成MCP请求
         mcp_request = self._generate_mcp_request(validated_params)
+        mcp_paths = self._get_mcp_paths(host, port)
         
         # 发送请求
-        return self._send_http_api_request(mcp_request, host, port, timeout)
+        return self._send_mcp_request(mcp_request, mcp_paths, timeout)
 
 
 # 工作流入口函数

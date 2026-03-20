@@ -1,6 +1,6 @@
 {
   "skill_name": "mindsdb-mcp-skill",
-  "version": "2.2",
+  "version": "2.7.0",
   "architecture": "three-module",
   "modules": {
     "db_connector": "公共数据库连接模块",
@@ -315,6 +315,185 @@
       "params": {
         "database": "warehouse_db",
         "nl_text": "What projects are in progress?"
+      }
+    },
+    {
+      "id": 27,
+      "module": "workflow_rag_analysis",
+      "workflow": "universal_database_query",
+      "prompt": "搜索包含'供应链'的所有记录",
+      "expected_output": "应该使用通用数据库查询功能，搜索所有文本字段，返回包含'供应链'的记录",
+      "action": "query_kb",
+      "params": {
+        "kb_name": "weekly_report_kb",
+        "nl_text": "搜索包含'供应链'的所有记录"
+      }
+    },
+    {
+      "id": 28,
+      "module": "workflow_rag_analysis",
+      "workflow": "universal_database_query",
+      "prompt": "查找关于'阮再胜'的信息",
+      "expected_output": "应该使用通用数据库查询功能，搜索所有文本字段，返回包含'阮再胜'的记录",
+      "action": "query_kb",
+      "params": {
+        "kb_name": "weekly_report_kb",
+        "nl_text": "查找关于'阮再胜'的信息"
+      }
+    },
+    {
+      "id": 29,
+      "module": "workflow_rag_analysis",
+      "workflow": "universal_database_query",
+      "prompt": "搜索所有的卡点",
+      "expected_output": "应该使用通用数据库查询功能，搜索所有文本字段，返回包含'卡点'的记录",
+      "action": "query_kb",
+      "params": {
+        "kb_name": "weekly_report_kb",
+        "nl_text": "搜索所有的卡点"
+      }
+    },
+    {
+      "id": 30,
+      "module": "workflow_rag_analysis",
+      "workflow": "nl2sql",
+      "prompt": "查询所有部门信息",
+      "expected_output": "应该使用NL2SQL功能，生成并执行SQL查询，返回所有部门信息",
+      "action": "nl2sql",
+      "params": {
+        "action": "nl2sql",
+        "database": "warehouse_db",
+        "nl_text": "查询所有部门信息"
+      }
+    },
+    {
+      "id": 31,
+      "module": "workflow_rag_analysis",
+      "workflow": "nl2sql",
+      "prompt": "搜索供应链相关的项目",
+      "expected_output": "应该使用NL2SQL功能，生成并执行SQL查询，返回包含'供应链'的项目信息",
+      "action": "nl2sql",
+      "params": {
+        "action": "nl2sql",
+        "database": "warehouse_db",
+        "nl_text": "搜索供应链相关的项目"
+      }
+    },
+    {
+      "id": 32,
+      "module": "workflow_rag_analysis",
+      "workflow": "nl2sql",
+      "prompt": "查找阮再胜的信息",
+      "expected_output": "应该使用NL2SQL功能，生成并执行SQL查询，返回包含'阮再胜'的信息",
+      "action": "nl2sql",
+      "params": {
+        "action": "nl2sql",
+        "database": "warehouse_db",
+        "nl_text": "查找阮再胜的信息"
+      }
+    },
+    {
+      "id": 33,
+      "module": "workflow_rag_analysis",
+      "workflow": "vanna_nl2sql",
+      "prompt": "初始化 warehouse_db 的训练数据",
+      "expected_output": "应该从 schema 提取 DDL 并添加到训练数据",
+      "action": "init_training",
+      "params": {
+        "action": "init_training",
+        "database": "warehouse_db"
+      }
+    },
+    {
+      "id": 34,
+      "module": "workflow_rag_analysis",
+      "workflow": "vanna_nl2sql",
+      "prompt": "添加一个 SQL 示例：查询所有活跃项目",
+      "expected_output": "应该成功添加 SQL 示例到训练数据",
+      "action": "add_training_sql",
+      "params": {
+        "action": "add_training_sql",
+        "database": "warehouse_db",
+        "sql": "SELECT * FROM projects WHERE status = 'active'",
+        "question": "查询所有活跃项目"
+      }
+    },
+    {
+      "id": 35,
+      "module": "workflow_rag_analysis",
+      "workflow": "vanna_nl2sql",
+      "prompt": "添加业务文档说明",
+      "expected_output": "应该成功添加文档到训练数据",
+      "action": "add_training_doc",
+      "params": {
+        "action": "add_training_doc",
+        "database": "warehouse_db",
+        "content": "projects 表存储所有项目信息，status 字段表示项目状态",
+        "title": "项目表说明"
+      }
+    },
+    {
+      "id": 36,
+      "module": "workflow_rag_analysis",
+      "workflow": "vanna_nl2sql",
+      "prompt": "获取 warehouse_db 的训练数据统计",
+      "expected_output": "应该返回 DDL、SQL、文档的数量统计",
+      "action": "get_training_stats",
+      "params": {
+        "action": "get_training_stats",
+        "database": "warehouse_db"
+      }
+    },
+    {
+      "id": 37,
+      "module": "workflow_rag_analysis",
+      "workflow": "vanna_nl2sql",
+      "prompt": "生成 SQL prompt 供 Agent LLM 使用",
+      "expected_output": "应该返回包含 prompt、context、instruction 的完整结果",
+      "action": "generate_sql_prompt",
+      "params": {
+        "action": "generate_sql_prompt",
+        "database": "warehouse_db",
+        "nl_text": "查询所有活跃项目"
+      }
+    },
+    {
+      "id": 38,
+      "module": "workflow_rag_analysis",
+      "workflow": "vanna_nl2sql",
+      "prompt": "验证 SQL 语句",
+      "expected_output": "应该返回验证结果，包含是否有效、修复后的 SQL、警告信息",
+      "action": "validate_sql",
+      "params": {
+        "action": "validate_sql",
+        "database": "warehouse_db",
+        "sql": "SELECT * FROM project WHERE status = 'active'"
+      }
+    },
+    {
+      "id": 39,
+      "module": "workflow_rag_analysis",
+      "workflow": "smart_query",
+      "prompt": "智能查询：查询所有部门信息",
+      "expected_output": "应该自动选择最佳查询方式并返回结果，包含 route_info",
+      "action": "smart_query",
+      "params": {
+        "action": "smart_query",
+        "database": "warehouse_db",
+        "nl_text": "查询所有部门信息"
+      }
+    },
+    {
+      "id": 40,
+      "module": "workflow_rag_analysis",
+      "workflow": "smart_query",
+      "prompt": "智能查询：分析项目进度",
+      "expected_output": "应该自动选择最佳查询方式并返回分析结果",
+      "action": "smart_query",
+      "params": {
+        "action": "smart_query",
+        "database": "warehouse_db",
+        "nl_text": "分析项目进度"
       }
     }
   ]

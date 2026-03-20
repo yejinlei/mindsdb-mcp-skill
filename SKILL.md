@@ -1,7 +1,7 @@
 ---
 name: mindsdb-mcp-skill
-description: MindsDB MCP服务器交互技能，采用三模块架构，支持通过自然语言查询和操作200+企业级数据源，提供RAG知识库构建、NLP2SQL转换、智能数据分析和元数据自动提取能力。当用户需要查询数据库、分析数据、构建知识库或进行自然语言到SQL转换时，务必使用此技能。 | MindsDB MCP server interaction skill with three-module architecture, supporting natural language query and operation of 200+ enterprise data sources, providing RAG knowledge base construction, NLP2SQL conversion, intelligent data analysis, and metadata auto-extraction capabilities. Be sure to use this skill when users need to query databases, analyze data, build knowledge bases, or perform natural language to SQL conversion.
-version: 2.4.0
+description: MindsDB MCP服务器交互技能，采用三模块架构，支持通过自然语言查询和操作200+企业级数据源，提供RAG知识库构建、NLP2SQL转换、智能数据分析和元数据自动提取能力。**务必使用此技能**当用户需要查询数据库、分析数据、构建知识库、进行自然语言到SQL转换、搜索数据、执行SQL、创建数据模型、连接MySQL/PostgreSQL/DuckDB等数据库、处理周报/报表数据、进行数据分析或任何与数据库交互相关的任务时。即使任务看起来简单，只要涉及数据库操作，就应该使用此技能。 | MindsDB MCP server interaction skill with three-module architecture, supporting natural language query and operation of 200+ enterprise data sources, providing RAG knowledge base construction, NLP2SQL conversion, intelligent data analysis, and metadata auto-extraction capabilities. **Be sure to use this skill** when users need to query databases, analyze data, build knowledge bases, perform natural language to SQL conversion, search data, execute SQL, create data models, connect to MySQL/PostgreSQL/DuckDB databases, process weekly reports/dashboard data, perform data analysis, or any task related to database interaction. Even if the task appears simple, as long as it involves database operations, this skill should be used.
+version: 2.7.0
 author: yejinlei
 ---
 
@@ -52,6 +52,8 @@ A universal database interaction skill based on the MindsDB MCP protocol, featur
 - **本地RAG备用方案**：当MindsDB未配置embedding model时，自动切换到本地RAG（ChromaDB + all-MiniLM-L6-v2）
 - **AI模型训练与预测**：基于数据源创建AI预测模型，进行数据预测和分析
 - **跨源数据分析**：支持多数据源联动查询与分析，提供统一的结果格式
+- **通用数据库查询**：不依赖特定业务场景，自动适应任何数据库结构，对所有文本字段进行智能搜索
+- **NL2SQL 转换**（v2.4.2 新增）：结合本地 RAG 技术，将自然语言转换为 SQL 查询，支持智能意图理解和结果处理
 - **Agent系统集成**：可直接集成到各类Agent系统，为Agent提供数据库操作能力
 
 ### 应用场景 | Application Scenarios
@@ -298,12 +300,123 @@ print("知识库查询结果:", query_result)
 | connect_db | db_type | 连接指定类型的数据源 |
 | list_databases | 无 | 列出所有已连接的数据源 |
 | show_table_schema | database | 查看指定数据源的所有数据表结构 |
-| nl_query | database, nl_text | 通过自然语言查询数据（NLP2SQL） |
+| nl_query | database, nl_text | 通过自然语言查询数据（使用MindsDB内置AI） |
+| nl2sql | database, nl_text | 本地NL2SQL转换（Vanna风格RAG增强） |
+| smart_query | database, nl_text | **智能查询（推荐）**：自动选择最佳查询方式 |
 | exec_sql | database, sql | 执行自定义SQL语句 |
 | analyze_data | database, nl_text | 对数据进行自然语言驱动的智能分析 |
 | query_kb | kb_name, nl_text | 向知识库发送自然语言查询 |
 | intelligent_query | database, nl_text | 智能查询（基于元数据） |
 | create_model | model_name, predict_field | 创建AI预测模型 |
+| generate_sql_prompt | database, nl_text | **生成 SQL prompt**：供 Agent LLM 生成 SQL |
+| validate_sql | database, sql | 验证并修复 SQL 语句 |
+| init_training | database | 初始化训练数据（自动提取DDL） |
+| add_training_sql | database, sql, question | 添加SQL示例训练数据 |
+| add_training_doc | database, content | 添加文档训练数据 |
+| get_training_stats | database | 获取训练数据统计 |
+
+#### smart_query 智能路由策略
+
+`smart_query` 会自动选择最佳查询方式，路由策略如下：
+
+| 优先级 | 条件 | 使用方式 |
+|--------|------|----------|
+| 1 | 指定了 `kb_name` 且知识库存在 | `query_kb` |
+| 2 | MindsDB AI 能力可用 | `nl_query` |
+| 3 | 本地 RAG 可用 | `nl2sql`（增强版） |
+| 4 | 其他情况 | `nl2sql`（纯规则模式） |
+
+返回结果中会包含 `route_info` 字段，说明选择了哪种方式及原因。
+
+#### Vanna 风格 Agent LLM SQL 生成
+
+本技能实现了完整的 Vanna 风格 NL2SQL 机制，核心流程如下：
+
+```
+用户问题 → RAG 检索 → 生成 Prompt → Agent LLM 生成 SQL → 验证/修复 → 执行
+```
+
+**核心方法**：`generate_sql_prompt`
+
+此方法检索相关的 DDL、SQL 示例、文档，构建完整的 prompt，返回给 Agent 的 LLM 生成 SQL。
+
+**使用示例**：
+
+```python
+# 1. 生成 SQL prompt（供 Agent LLM 使用）
+params = {
+    "action": "generate_sql_prompt",
+    "database": "warehouse_db",
+    "nl_text": "查询所有活跃项目"
+}
+result = rag_analysis_workflow_entry(params)
+
+# result 包含:
+# - prompt: 完整的 SQL 生成 prompt
+# - context: 相关的 DDL、SQL 示例、文档
+# - instruction_for_agent: 给 Agent 的指令
+
+# 2. Agent LLM 根据 prompt 生成 SQL
+# sql = agent_llm.generate(result["data"]["prompt"])
+
+# 3. 验证并修复 SQL
+params = {
+    "action": "validate_sql",
+    "database": "warehouse_db",
+    "sql": "SELECT * FROM project WHERE status = 'active'"
+}
+result = rag_analysis_workflow_entry(params)
+
+# 4. 执行 SQL
+params = {
+    "action": "exec_sql",
+    "database": "warehouse_db",
+    "sql": result["data"]["fixed_sql"]
+}
+```
+
+#### Vanna 风格训练数据管理
+
+本技能实现了类似 Vanna 的训练数据管理机制，支持：
+
+| 数据类型 | 说明 | 用途 |
+|----------|------|------|
+| DDL | 表结构定义 | 帮助理解数据库结构 |
+| SQL 示例 | 自然语言-SQL 对 | 相似查询时复用 SQL |
+| 文档 | 业务文档/说明 | 提供业务上下文 |
+
+**使用示例**：
+
+```python
+# 1. 初始化训练数据（自动从 schema 提取 DDL）
+params = {
+    "action": "init_training",
+    "database": "warehouse_db"
+}
+
+# 2. 添加 SQL 示例
+params = {
+    "action": "add_training_sql",
+    "database": "warehouse_db",
+    "sql": "SELECT * FROM projects WHERE status = 'active'",
+    "question": "查询所有活跃项目",
+    "tables": ["projects"]
+}
+
+# 3. 添加业务文档
+params = {
+    "action": "add_training_doc",
+    "database": "warehouse_db",
+    "content": "projects 表存储所有项目信息，status 字段表示项目状态...",
+    "title": "项目表说明"
+}
+
+# 4. 查看训练数据统计
+params = {
+    "action": "get_training_stats",
+    "database": "warehouse_db"
+}
+```
 
 ### 模块4：metadata_extractor（元数据提取模块）
 

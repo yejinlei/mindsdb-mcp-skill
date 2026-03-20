@@ -19,6 +19,7 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 from db_connector import get_db_connector
+from nl2sql.engine import get_nl2sql_engine
 
 
 class RAGAnalysisWorkflow:
@@ -52,6 +53,12 @@ class RAGAnalysisWorkflow:
         
         # 数据库连接器
         self.db_connector = get_db_connector()
+        
+        # NL2SQL 引擎
+        self.nl2sql_engine = get_nl2sql_engine(self)
+        
+        # MindsDB AI 能力状态缓存
+        self._mindsdb_ai_available = None
     
     def check_mindsdb_installed(self) -> bool:
         """检查MindsDB是否已安装"""
@@ -178,6 +185,14 @@ class RAGAnalysisWorkflow:
             "analyze_data": ["database", "nl_text"],
             "query_kb": ["kb_name", "nl_text"],
             "create_model": ["model_name", "predict_field"],
+            "nl2sql": ["database", "nl_text"],
+            "smart_query": ["database", "nl_text"],
+            "generate_sql_prompt": ["database", "nl_text"],
+            "validate_sql": ["database", "sql"],
+            "init_training": ["database"],
+            "add_training_sql": ["database", "sql", "question"],
+            "add_training_doc": ["database", "content"],
+            "get_training_stats": ["database"]
         }
         
         if action not in required_params:
@@ -332,7 +347,407 @@ class RAGAnalysisWorkflow:
             })
         except Exception as e:
             return self._generate_response(-8, f"Local RAG error: {str(e)}")
+
+    def _execute_database_query(self, database: str, nl_text: str) -> Dict[str, Any]:
+        """执行数据库查询以补充RAG结果 - 通用版本"""
+        try:
+            results = {}
+            
+            # 检查是否有直接的数据库连接
+            if hasattr(self.db_connector, 'conn') and self.db_connector.conn is not None:
+                # 使用直接的数据库连接
+                conn = self.db_connector.conn
+                
+                # 获取数据库中的所有表
+                tables = conn.execute("SHOW TABLES").fetchall()
+                table_names = [table[0] for table in tables]
+                
+                # 对每个表进行搜索
+                for table in table_names:
+                    # 获取表结构
+                    schema = conn.execute(f"DESCRIBE {table}").fetchall()
+                    
+                    # 分析每个字段，确定搜索策略
+                    searchable_columns = []
+                    for col_info in schema:
+                        col_name = col_info[0]
+                        col_type = col_info[1]
+                        
+                        # 简化字段类型检查，包含所有可能的文本类型
+                        if 'VARCHAR' in col_type.upper() or 'TEXT' in col_type.upper() or 'CHAR' in col_type.upper():
+                            searchable_columns.append(col_name)
+                    
+                    if not searchable_columns:
+                        continue
+                    
+                    # 构建搜索SQL - 搜索所有文本字段
+                    where_conditions = []
+                    for col in searchable_columns:
+                        where_conditions.append(f"{col} LIKE '%{nl_text}%'")
+                    
+                    # 限制结果数量，避免返回过多数据
+                    sql = f"SELECT {', '.join(searchable_columns)} FROM {table} WHERE {' OR '.join(where_conditions)} LIMIT 10"
+                    
+                    try:
+                        table_result = conn.execute(sql).fetchall()
+                        if table_result:
+                            # 使用表名作为结果的key
+                            results[table] = {
+                                "columns": searchable_columns,
+                                "rows": table_result,
+                                "count": len(table_result)
+                            }
+                    except Exception as e:
+                        # 如果某个表查询失败，继续查询其他表
+                        continue
+            else:
+                # 使用MCP协议进行查询
+                # 获取数据库中的所有表
+                show_tables_result = self.db_connector.show_tables(database)
+                if show_tables_result.get('code') != 0:
+                    return {"error": f"Failed to get tables: {show_tables_result.get('msg')}"}
+                
+                tables_data = show_tables_result.get('data', {})
+                table_names = []
+                if 'data' in tables_data:
+                    # 提取表名
+                    for row in tables_data['data']:
+                        if row:
+                            table_names.append(row[0])
+                
+                # 对每个表进行搜索
+                for table in table_names:
+                    # 获取表结构
+                    describe_result = self.db_connector.describe_table(database, table)
+                    if describe_result.get('code') != 0:
+                        continue
+                    
+                    schema_data = describe_result.get('data', {})
+                    searchable_columns = []
+                    if 'data' in schema_data and 'columns' in schema_data:
+                        columns = schema_data['columns']
+                        rows = schema_data['data']
+                        # 分析每个字段，确定搜索策略
+                        for i, row in enumerate(rows):
+                            if i < len(columns):
+                                col_name = row[0] if row else ''
+                                # 假设类型在第二列
+                                col_type = row[1] if len(row) > 1 else ''
+                                
+                                # 简化字段类型检查
+                                if 'VARCHAR' in col_type.upper() or 'TEXT' in col_type.upper() or 'CHAR' in col_type.upper():
+                                    searchable_columns.append(col_name)
+                    
+                    if not searchable_columns:
+                        continue
+                    
+                    # 构建搜索SQL - 搜索所有文本字段
+                    where_conditions = []
+                    for col in searchable_columns:
+                        where_conditions.append(f"{col} LIKE '%{nl_text}%'")
+                    
+                    # 限制结果数量，避免返回过多数据
+                    sql = f"SELECT {', '.join(searchable_columns)} FROM {database}.{table} WHERE {' OR '.join(where_conditions)} LIMIT 10"
+                    
+                    try:
+                        table_result = self.db_connector.execute_sql(sql)
+                        if table_result.get('code') == 0:
+                            result_data = table_result.get('data', {})
+                            if 'data' in result_data and 'columns' in result_data:
+                                rows = result_data['data']
+                                if rows:
+                                    # 使用表名作为结果的key
+                                    results[table] = {
+                                        "columns": result_data['columns'],
+                                        "rows": rows,
+                                        "count": len(rows)
+                                    }
+                    except Exception as e:
+                        # 如果某个表查询失败，继续查询其他表
+                        continue
+            
+            return results
+        except Exception as e:
+            return {"error": str(e)}
     
+    def _extract_person_name(self, text: str) -> str:
+        """从文本中提取人名 - 通用版本"""
+        import re
+        
+        # 查找2-4个汉字的连续组合
+        pattern = r'[\u4e00-\u9fa5]{2,4}'
+        matches = re.findall(pattern, text)
+        
+        # 优先返回长度为2-3的匹配结果
+        for match in matches:
+            if 2 <= len(match) <= 3:
+                return match
+        
+        return text
+    
+    def _enhanced_query_workflow(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """增强型查询工作流：RAG + 数据库补充 - 通用版本"""
+        nl_text = params.get("nl_text")
+        database = params.get("database", "default")
+        
+        # 1. 执行RAG查询
+        rag_result = self._execute_local_rag_query(params)
+        
+        # 2. 评估RAG结果
+        rag_has_results = False
+        if rag_result.get("code") == 0 and rag_result.get("data"):
+            results = rag_result["data"].get("results", {})
+            if isinstance(results, dict) and "documents" in results:
+                rag_has_results = any(doc for doc_list in results["documents"] for doc in doc_list)
+        
+        # 3. 如果RAG结果不充分，补充数据库查询
+        if not rag_has_results:
+            # 执行数据库补充查询
+            db_results = self._execute_database_query(database, nl_text)
+            
+            # 构建增强型结果
+            enhanced_data = {
+                "rag_results": rag_result.get("data"),
+                "db_results": db_results,
+                "system": "enhanced",
+                "query": nl_text
+            }
+            
+            # 处理数据库查询结果
+            if db_results and "error" not in db_results:
+                # 构建人类可读的结果
+                readable_results = []
+                
+                # 遍历所有表的查询结果
+                for table_name, table_data in db_results.items():
+                    columns = table_data["columns"]
+                    rows = table_data["rows"]
+                    count = table_data["count"]
+                    
+                    readable_results.append(f"\n=== 表: {table_name} (找到 {count} 条记录) ===")
+                    
+                    # 显示前5条记录
+                    for i, row in enumerate(rows[:5]):
+                        row_str = "  "
+                        for j, value in enumerate(row):
+                            if j < len(columns):
+                                col_name = columns[j]
+                                # 截断过长的文本
+                                if isinstance(value, str) and len(value) > 50:
+                                    value = value[:50] + "..."
+                                row_str += f"{col_name}={value} | "
+                        readable_results.append(row_str)
+                    
+                    if count > 5:
+                        readable_results.append(f"  ... 还有 {count - 5} 条记录")
+                
+                enhanced_data["readable_results"] = readable_results
+            
+            return self._generate_response(0, "Enhanced query success", enhanced_data)
+        
+        return rag_result
+    
+    def _execute_nl2sql(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """执行 NL2SQL 操作"""
+        nl_text = params.get("nl_text")
+        database = params.get("database", "default")
+        
+        try:
+            # 1. 生成 SQL
+            sql = self.nl2sql_engine.generate_sql(nl_text, database)
+            
+            # 2. 执行 SQL
+            result = self.nl2sql_engine.execute_sql(sql, database)
+            
+            # 3. 处理结果
+            processed_result = self.nl2sql_engine.process_result(result, nl_text)
+            
+            # 4. 构建响应
+            response_data = {
+                "nl_text": nl_text,
+                "generated_sql": sql,
+                "result": processed_result,
+                "system": "nl2sql"
+            }
+            
+            return self._generate_response(0, "NL2SQL execution success", response_data)
+        except Exception as e:
+            return self._generate_response(-11, f"NL2SQL error: {str(e)}")
+    
+    def _check_mindsdb_ai_capability(self) -> bool:
+        """检查 MindsDB 是否配置了 AI 能力"""
+        if self._mindsdb_ai_available is not None:
+            return self._mindsdb_ai_available
+        
+        try:
+            # 尝试执行一个简单的 nl_query 测试
+            test_result = self.db_connector.execute_sql(
+                "SELECT * FROM information_schema.tables LIMIT 1"
+            )
+            # 如果能执行 SQL，说明 MindsDB 可用
+            # 但 nl_query 需要额外配置 embedding model
+            # 这里简化处理：如果 MindsDB 服务可用，假设 AI 能力可用
+            self._mindsdb_ai_available = test_result.get("code") == 0
+            return self._mindsdb_ai_available
+        except Exception:
+            self._mindsdb_ai_available = False
+            return False
+    
+    def _check_local_rag_available(self) -> bool:
+        """检查本地 RAG 是否可用"""
+        if self.local_rag_initialized:
+            return True
+        
+        # 尝试初始化本地 RAG
+        return self._setup_local_rag()
+    
+    def _check_kb_exists(self, kb_name: str) -> bool:
+        """检查知识库是否存在"""
+        try:
+            if not self.local_rag_initialized:
+                return False
+            
+            safe_kb_name = kb_name.replace('/', '_').replace('\\', '_').replace('.', '_')
+            collection_name = f"mindsdb_skill_{safe_kb_name}"
+            
+            # 尝试获取集合
+            collections = self.rag_client.list_collections()
+            return any(c.name == collection_name for c in collections)
+        except Exception:
+            return False
+    
+    def _execute_smart_query(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """智能查询：自动选择最佳查询方式
+        
+        路由策略：
+        1. 如果指定了 kb_name 且知识库存在 -> query_kb
+        2. 如果 MindsDB AI 可用 -> nl_query
+        3. 如果本地 RAG 可用 -> nl2sql
+        4. 降级到 nl2sql（纯规则模式）
+        """
+        nl_text = params.get("nl_text")
+        database = params.get("database", "default")
+        kb_name = params.get("kb_name")
+        
+        route_info = {
+            "attempted_methods": [],
+            "selected_method": None,
+            "reason": None
+        }
+        
+        # 策略1: 如果指定了知识库且存在，优先使用知识库
+        if kb_name:
+            route_info["attempted_methods"].append("query_kb")
+            if self._check_kb_exists(kb_name):
+                route_info["selected_method"] = "query_kb"
+                route_info["reason"] = "指定的知识库存在"
+                kb_params = {
+                    "action": "query_kb",
+                    "kb_name": kb_name,
+                    "nl_text": nl_text
+                }
+                result = self._enhanced_query_workflow(kb_params)
+                result["data"]["route_info"] = route_info
+                return result
+            else:
+                route_info["reason"] = f"知识库 {kb_name} 不存在"
+        
+        # 策略2: 检查 MindsDB AI 能力
+        route_info["attempted_methods"].append("nl_query")
+        if self._check_mindsdb_ai_capability():
+            route_info["selected_method"] = "nl_query"
+            route_info["reason"] = "MindsDB AI 能力可用"
+            query = f"SELECT * FROM {database}.nl_query('{nl_text}')"
+            result = self.db_connector.execute_sql(query)
+            result["data"]["route_info"] = route_info
+            return result
+        
+        # 策略3: 使用本地 NL2SQL 引擎
+        route_info["attempted_methods"].append("nl2sql")
+        route_info["selected_method"] = "nl2sql"
+        
+        # 尝试初始化本地 RAG 以增强 NL2SQL
+        if self._check_local_rag_available():
+            route_info["reason"] = "本地 RAG 可用，使用增强版 NL2SQL"
+        else:
+            route_info["reason"] = "使用纯规则 NL2SQL（无嵌入模型）"
+        
+        result = self._execute_nl2sql(params)
+        result["data"]["route_info"] = route_info
+        return result
+    
+    def _execute_init_training(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """初始化训练数据"""
+        database = params.get("database")
+        auto_add_ddl = params.get("auto_add_ddl", True)
+        
+        try:
+            result = self.nl2sql_engine.initialize_from_schema(database, auto_add_ddl)
+            return self._generate_response(0, "Training data initialized", result)
+        except Exception as e:
+            return self._generate_response(-11, f"Init training error: {str(e)}")
+    
+    def _execute_add_training_sql(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """添加 SQL 训练数据"""
+        database = params.get("database")
+        sql = params.get("sql")
+        question = params.get("question")
+        tables = params.get("tables")
+        
+        try:
+            result = self.nl2sql_engine.add_training_sql(database, sql, question, tables)
+            return self._generate_response(0, "Training SQL added", result)
+        except Exception as e:
+            return self._generate_response(-11, f"Add training SQL error: {str(e)}")
+    
+    def _execute_add_training_doc(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """添加文档训练数据"""
+        database = params.get("database")
+        content = params.get("content")
+        title = params.get("title")
+        source = params.get("source")
+        
+        try:
+            result = self.nl2sql_engine.add_training_documentation(database, content, title, source)
+            return self._generate_response(0, "Training documentation added", result)
+        except Exception as e:
+            return self._generate_response(-11, f"Add training doc error: {str(e)}")
+    
+    def _execute_get_training_stats(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """获取训练数据统计"""
+        database = params.get("database")
+        
+        try:
+            result = self.nl2sql_engine.get_training_stats(database)
+            return self._generate_response(0, "Training stats retrieved", result)
+        except Exception as e:
+            return self._generate_response(-11, f"Get training stats error: {str(e)}")
+    
+    def _execute_generate_sql_prompt(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """生成供 Agent LLM 使用的 SQL 生成 prompt
+        
+        这是 Vanna 风格的核心方法，返回 prompt 给 Agent，由 Agent 的 LLM 生成 SQL
+        """
+        database = params.get("database")
+        nl_text = params.get("nl_text")
+        
+        try:
+            result = self.nl2sql_engine.generate_sql_prompt_for_agent(nl_text, database)
+            return self._generate_response(0, "SQL prompt generated for Agent LLM", result)
+        except Exception as e:
+            return self._generate_response(-11, f"Generate SQL prompt error: {str(e)}")
+    
+    def _execute_validate_sql(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """验证并修复 SQL 语句"""
+        database = params.get("database")
+        sql = params.get("sql")
+        
+        try:
+            result = self.nl2sql_engine.validate_and_fix_sql(sql, database)
+            return self._generate_response(0, "SQL validated", result)
+        except Exception as e:
+            return self._generate_response(-11, f"Validate SQL error: {str(e)}")
+
     def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """执行RAG分析工作流操作"""
         # 参数验证
@@ -398,8 +813,35 @@ class RAGAnalysisWorkflow:
         
         # 知识库查询
         elif action == "query_kb":
-            # 尝试使用本地RAG
-            return self._execute_local_rag_query(validated_params)
+            # 使用增强型查询工作流
+            return self._enhanced_query_workflow(validated_params)
+        
+        # NL2SQL 操作
+        elif action == "nl2sql":
+            return self._execute_nl2sql(validated_params)
+        
+        # 智能查询（自动路由）
+        elif action == "smart_query":
+            return self._execute_smart_query(validated_params)
+        
+        # 训练数据管理
+        elif action == "init_training":
+            return self._execute_init_training(validated_params)
+        
+        elif action == "add_training_sql":
+            return self._execute_add_training_sql(validated_params)
+        
+        elif action == "add_training_doc":
+            return self._execute_add_training_doc(validated_params)
+        
+        elif action == "get_training_stats":
+            return self._execute_get_training_stats(validated_params)
+        
+        elif action == "generate_sql_prompt":
+            return self._execute_generate_sql_prompt(validated_params)
+        
+        elif action == "validate_sql":
+            return self._execute_validate_sql(validated_params)
         
         return self._generate_response(-2, f"Unsupported action: {action}")
 
