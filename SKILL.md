@@ -1,7 +1,7 @@
 ---
 name: mindsdb-mcp-skill
 description: MindsDB MCP服务器交互技能，采用三模块架构，支持通过自然语言查询和操作200+企业级数据源，提供RAG知识库构建、NLP2SQL转换、智能数据分析和元数据自动提取能力。当用户需要查询数据库、分析数据、构建知识库或进行自然语言到SQL转换时，务必使用此技能。 | MindsDB MCP server interaction skill with three-module architecture, supporting natural language query and operation of 200+ enterprise data sources, providing RAG knowledge base construction, NLP2SQL conversion, intelligent data analysis, and metadata auto-extraction capabilities. Be sure to use this skill when users need to query databases, analyze data, build knowledge bases, or perform natural language to SQL conversion.
-version: 2.2.0
+version: 2.4.0
 author: yejinlei
 ---
 
@@ -47,7 +47,7 @@ A universal database interaction skill based on the MindsDB MCP protocol, featur
 
 - **自然语言到SQL转换**：将用户的自然语言查询自动转换为可执行的SQL语句，无需用户编写SQL
 - **元数据自动提取**：自动理解数据库结构，无需手动配置即可进行智能查询
-- **多数据源管理**：统一管理和操作200+企业级数据源，包括SQL数据库、NoSQL数据库、时序数据库、文件型数据源等
+- **多数据源管理**：通过MindsDB HTTP API统一管理和操作200+企业级数据源，包括MySQL、DuckDB、TDengine、PostgreSQL、MongoDB、ClickHouse、Snowflake等
 - **RAG知识库构建与查询**：基于数据库数据构建知识库，支持智能问答和文档检索，提升数据分析能力
 - **本地RAG备用方案**：当MindsDB未配置embedding model时，自动切换到本地RAG（ChromaDB + all-MiniLM-L6-v2）
 - **AI模型训练与预测**：基于数据源创建AI预测模型，进行数据预测和分析
@@ -367,6 +367,7 @@ mindsdb-mcp-skill/
 │   ├── db_connector.py           # 公共数据库连接模块
 │   ├── workflow_rag_build.py     # 工作流1：本地RAG构建与管理
 │   ├── workflow_rag_analysis.py  # 工作流2：基于RAG的NLP2SQL和数据分析
+│   ├── workflow_database.py      # 工作流3：数据库连接与查询工作流
 │   ├── data_dictionary.py        # 数据字典实现
 │   ├── metadata_extractor.py     # 元数据自动提取模块
 │   ├── intelligent_query.py      # 智能查询引擎

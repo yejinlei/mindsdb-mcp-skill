@@ -1,4 +1,4 @@
-# MindsDB MCP Skill v2.3
+# MindsDB MCP Skill v2.4
 
 ## 项目简介 | Project Introduction
 
@@ -162,8 +162,8 @@ This skill package is centered around RAG (Retrieval-Augmented Generation), enca
 - **LLM智能分析工作流**（v2.2.0新增）：利用Agent内置LLM能力进行深度意图理解和智能分析，支持中英文双语查询。
   **LLM-Powered Intelligent Analysis Workflow** (v2.2.0 New): Utilize Agent's built-in LLM capabilities for deep intent understanding and intelligent analysis, supporting both Chinese and English queries.
 
-- **数据源管理**：连接多类型数据源（MySQL、DuckDB、TDengine等）、列出所有数据源、查看数据表结构。
-  **Data Source Management**: Connect multiple types of data sources (MySQL, DuckDB, TDengine, etc.), list all data sources, view data table structures.
+- **数据源管理**：通过MindsDB HTTP API连接多类型数据源（MySQL、DuckDB、TDengine、PostgreSQL、MongoDB、ClickHouse、Snowflake等）、列出所有数据源、查看数据表结构。
+  **Data Source Management**: Connect multiple types of data sources (MySQL, DuckDB, TDengine, PostgreSQL, MongoDB, ClickHouse, Snowflake, etc.) through MindsDB HTTP API, list all data sources, view data table structures.
 
 - **NLP2SQL自然语言查询**：将自然语言自动转换为SQL语句并执行，无需用户编写SQL。
   **NLP2SQL Natural Language Query**: Automatically convert natural language to SQL statements and execute, no need for users to write SQL.
@@ -255,6 +255,7 @@ mindsdb-mcp-skill/
 │   ├── db_connector.py           # 公共数据库连接模块
 │   ├── workflow_rag_build.py     # 工作流1：本地RAG构建与管理
 │   ├── workflow_rag_analysis.py  # 工作流2：基于RAG的NLP2SQL和数据分析
+│   ├── workflow_database.py      # 工作流3：数据库连接与查询工作流（新增v2.4.0）
 │   ├── data_dictionary.py        # 数据字典实现
 │   ├── metadata_extractor.py     # 元数据自动提取模块（新增v2.1.0）
 │   ├── intelligent_query.py      # 智能查询引擎（新增v2.1.0）
