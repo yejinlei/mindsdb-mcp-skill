@@ -275,6 +275,196 @@ class RAGBuildWorkflow:
             print(f"添加数据字典到RAG失败: {e}")
             return False
     
+    def _refresh_data_dict_full(self, database: str) -> Dict[str, Any]:
+        """
+        全量刷新数据字典
+        :param database: 数据库名
+        :return: 刷新统计信息
+        """
+        try:
+            from metadata_extractor import MetadataExtractor
+            
+            # 获取数据库路径（从配置或环境变量）
+            db_path = self._get_database_path(database)
+            
+            # 全量提取元数据
+            extractor = MetadataExtractor()
+            new_data_dict = extractor.extract_from_duckdb(db_path)
+            
+            # 完全替换现有数据字典
+            self.data_dictionary = new_data_dict
+            
+            return {
+                "tables_extracted": len(new_data_dict.tables),
+                "columns_extracted": sum(len(cols) for cols in new_data_dict.columns.values()),
+                "relationships_detected": len(new_data_dict.relationships),
+                "mode": "full"
+            }
+        except Exception as e:
+            print(f"全量刷新数据字典失败: {e}")
+            raise
+    
+    def _refresh_data_dict_incremental(self, database: str) -> Dict[str, Any]:
+        """
+        增量刷新数据字典
+        :param database: 数据库名
+        :return: 刷新统计信息
+        """
+        try:
+            from metadata_extractor import MetadataExtractor
+            
+            # 获取数据库路径
+            db_path = self._get_database_path(database)
+            
+            # 增量提取元数据（使用现有数据字典）
+            extractor = MetadataExtractor()
+            new_data_dict = extractor.extract_from_duckdb(
+                db_path, 
+                existing_data_dict=self.data_dictionary,
+                mode='incremental'
+            )
+            
+            # 合并更新
+            merge_stats = self.data_dictionary.merge_with_existing(
+                new_data_dict, 
+                mode='incremental'
+            )
+            
+            return {
+                "tables_added": merge_stats.get('tables_added', 0),
+                "tables_updated": merge_stats.get('tables_updated', 0),
+                "columns_added": merge_stats.get('columns_added', 0),
+                "columns_updated": merge_stats.get('columns_updated', 0),
+                "relationships_added": merge_stats.get('relationships_added', 0),
+                "total_changes": merge_stats.get('total_changes', 0),
+                "mode": "incremental"
+            }
+        except Exception as e:
+            print(f"增量刷新数据字典失败: {e}")
+            raise
+    
+    def _update_rag_with_new_metadata(self, database: str) -> bool:
+        """
+        使用新的元数据更新 RAG 知识库
+        :param database: 数据库名
+        :return: 是否成功
+        """
+        try:
+            if not self.training_collector:
+                return False
+            
+            # 生成 RAG 文档
+            rag_documents = self.data_dictionary.generate_rag_documents()
+            
+            # 添加到训练数据收集器（会自动双存储）
+            for doc in rag_documents:
+                try:
+                    # 根据文档类型选择添加方法
+                    doc_type = doc['metadata'].get('type', '')
+                    
+                    if doc_type == 'table':
+                        # 表级文档：添加为 DDL
+                        table_name = doc['metadata'].get('table_name', '')
+                        table_meta = self.data_dictionary.get_table_metadata(table_name)
+                        if table_meta:
+                            # 生成 DDL
+                            columns = self.data_dictionary.get_table_columns(table_name)
+                            ddl = f"CREATE TABLE {table_name} (\n"
+                            ddl += ",\n".join([f"    {col} VARCHAR" for col in columns])
+                            ddl += "\n)"
+                            
+                            self.training_collector.add_ddl(
+                                database=database,
+                                table=table_name,
+                                ddl=ddl,
+                                description=table_meta.get('description', '')
+                            )
+                    
+                    elif doc_type == 'column':
+                        # 列级文档：添加为文档
+                        table_name = doc['metadata'].get('table_name', '')
+                        column_name = doc['metadata'].get('column_name', '')
+                        column_meta = self.data_dictionary.get_column_metadata(table_name, column_name)
+                        if column_meta:
+                            content = f"表 {table_name} 的列 {column_name}：\n"
+                            content += f"数据类型：{column_meta.get('data_type', '未知')}\n"
+                            content += f"描述：{column_meta.get('description', '无')}\n"
+                            content += f"业务含义：{column_meta.get('business_meaning', '无')}\n"
+                            
+                            self.training_collector.add_documentation(
+                                database=database,
+                                content=content,
+                                title=f"{table_name}.{column_name}",
+                                source='data_dictionary',
+                                intent_tags=['metadata', 'column']
+                            )
+                    
+                    elif doc_type == 'relationship':
+                        # 关系文档：添加为文档
+                        from_table = doc['metadata'].get('from_table', '')
+                        to_table = doc['metadata'].get('to_table', '')
+                        content = f"表关系：{from_table} -> {to_table}\n"
+                        content += f"关系类型：{doc['metadata'].get('relationship_type', '未知')}\n"
+                        
+                        self.training_collector.add_documentation(
+                            database=database,
+                            content=content,
+                            title=f"{from_table}->{to_table}",
+                            source='data_dictionary',
+                            intent_tags=['metadata', 'relationship']
+                        )
+                    
+                    elif doc_type == 'business_domain':
+                        # 业务域文档：添加为文档
+                        domain_name = doc['metadata'].get('domain_name', '')
+                        content = f"业务域：{domain_name}\n"
+                        content += f"描述：{doc['metadata'].get('description', '无')}\n"
+                        
+                        self.training_collector.add_documentation(
+                            database=database,
+                            content=content,
+                            title=domain_name,
+                            source='data_dictionary',
+                            intent_tags=['metadata', 'business_domain']
+                        )
+                
+                except Exception as e:
+                    print(f"添加文档到训练数据失败: {e}")
+            
+            return True
+        except Exception as e:
+            print(f"更新 RAG 知识库失败: {e}")
+            return False
+    
+    def _get_database_path(self, database: str) -> str:
+        """
+        获取数据库路径
+        :param database: 数据库名
+        :return: 数据库文件路径
+        """
+        # 尝试从环境变量获取
+        db_path = os.getenv(f"{database.upper()}_PATH")
+        if db_path and os.path.exists(db_path):
+            return db_path
+        
+        # 尝试从常用位置查找
+        common_paths = [
+            f"data/{database}.duckdb",
+            f"data/{database}.db",
+            f"../data/{database}.duckdb",
+            f"../data/{database}.db",
+            f"../../data/{database}.duckdb",
+            f"../../data/{database}.db",
+        ]
+        
+        for path in common_paths:
+            full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
+            if os.path.exists(full_path):
+                return full_path
+        
+        # 如果都找不到，返回默认路径
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), f"data/{database}.duckdb")
+    
     def _execute_local_rag(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """执行本地RAG操作"""
         action = params["action"]
@@ -455,11 +645,43 @@ class RAGBuildWorkflow:
             
             elif action == "refresh_data_dict":
                 database = validated_params.get("database")
-                # 这里可以实现从数据库刷新数据字典的逻辑
-                self._save_data_dictionary()
-                return self._generate_response(0, "Data dictionary refreshed", {
-                    "database": database
-                })
+                mode = validated_params.get("mode", "incremental")  # 默认增量更新
+                force_rebuild = validated_params.get("force_rebuild", False)
+                
+                try:
+                    # 加载现有数据字典
+                    self._load_data_dictionary()
+                    
+                    if force_rebuild:
+                        # 强制重建：全量提取
+                        print(f"强制重建数据字典: {database}")
+                        result = self._refresh_data_dict_full(database)
+                    elif mode == "incremental":
+                        # 增量更新
+                        print(f"增量更新数据字典: {database}")
+                        result = self._refresh_data_dict_incremental(database)
+                    else:
+                        # 全量更新
+                        print(f"全量更新数据字典: {database}")
+                        result = self._refresh_data_dict_full(database)
+                    
+                    # 保存更新后的数据字典
+                    self._save_data_dictionary()
+                    
+                    # 更新 RAG 知识库
+                    if self.local_rag_initialized and self.training_collector:
+                        print("更新 RAG 知识库...")
+                        self._update_rag_with_new_metadata(database)
+                    
+                    return self._generate_response(0, "Data dictionary refreshed", {
+                        "database": database,
+                        "mode": mode,
+                        "force_rebuild": force_rebuild,
+                        **result
+                    })
+                except Exception as e:
+                    print(f"刷新数据字典失败: {e}")
+                    return self._generate_response(-11, f"Failed to refresh data dictionary: {str(e)}")
         
         # RAG操作
         if action in ["create_kb", "list_kb", "delete_kb"]:

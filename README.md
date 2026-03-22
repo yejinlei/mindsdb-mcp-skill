@@ -1,8 +1,8 @@
-# MindsDB MCP Skill v2.4.2
+# MindsDB MCP Skill v2.7.2
 
 ## 项目简介 | Project Introduction
 
-基于MindsDB MCP接口开发的Python技能包，采用**三模块架构**设计，支持RAG知识库全流程操作、NLP2SQL自然语言查询、智能数据分析、**元数据自动提取**和**智能查询引擎**等功能，可直接集成到Agent系统，实现数据源与RAG知识库的一站式管理。
+基于MindsDB MCP接口开发的Python技能包，采用**三模块架构**设计，支持RAG知识库全流程操作、NLP2SQL自然语言查询、智能数据分析、**元数据自动提取**、**智能查询引擎**和**增量更新**等功能，可直接集成到Agent系统，实现数据源与RAG知识库的一站式管理。
 
 **核心亮点**：
 - **LLM智能分析工作流**：利用Agent内置LLM能力进行意图理解和智能分析
@@ -16,6 +16,36 @@
 **核心价值**：任意 Agent（包括 AI IDE）可通过本技能实现 NLP2SQL 能力，无需在 MindsDB EDIT 内定义 Agent+RAG，通过外部 Agent+SKILL+MindsDB 的组合方式，大大提升效率和通用性。
 
 **Core Value**: Any Agent (including AI IDE) can implement NLP2SQL capabilities through this skill, without defining Agent+RAG within MindsDB EDIT. The combination of external Agent+SKILL+MindsDB greatly improves efficiency and versatility.
+
+## 触发条件 | Trigger Conditions
+
+### 触发场景 | Trigger Scenarios
+- **数据库查询**：当用户需要查询数据库、分析数据、构建知识库时
+- **NL2SQL转换**：当用户需要将自然语言转换为SQL时
+- **RAG知识库操作**：当用户需要创建、查询、删除知识库时
+- **元数据提取**：当用户需要理解数据库结构时
+- **AI预测模型**：当用户需要创建和使用AI预测模型时
+- **增量更新**：当数据库发生变更需要同步更新时
+
+### 不触发场景 | No-Trigger Scenarios
+- **纯SQL编写**：仅需要编写SQL语句而不需要自然语言转换
+- **SQL性能优化**：仅需要优化现有SQL语句的性能
+- **数据库配置问题**：仅需要配置数据库连接或参数
+- **编程脚本编写**：仅需要编写通用编程脚本
+
+**Trigger Scenarios**:
+- **Database queries**: When users need to query databases, analyze data, or build knowledge bases
+- **NL2SQL conversion**: When users need to convert natural language to SQL
+- **RAG knowledge base operations**: When users need to create, query, or delete knowledge bases
+- **Metadata extraction**: When users need to understand database structure
+- **AI prediction models**: When users need to create and use AI prediction models
+- **Incremental updates**: When databases change and need synchronized updates
+
+**No-Trigger Scenarios**:
+- **Pure SQL writing**: Only need to write SQL statements without natural language conversion
+- **SQL performance optimization**: Only need to optimize performance of existing SQL statements
+- **Database configuration issues**: Only need to configure database connections or parameters
+- **Programming script writing**: Only need to write general programming scripts
 
 ---
 
@@ -136,6 +166,123 @@ print(f"结果: {result['data']}")
 |------|------|------|
 | 元数据提取 | `metadata_extractor.py` | 自动提取数据库元数据 |
 | 智能查询 | `intelligent_query.py` | 基于元数据的自然语言查询 |
+| 增量更新 | `data_dictionary.py` | 支持数据库变更的增量更新 |
+
+## 底层原理与脚本实现机制 | Underlying Principles and Script Implementation Mechanism
+
+### 核心脚本实现机制 | Core Script Implementation Mechanism
+
+#### 1. db_connector.py - 公共数据库连接模块
+**实现机制**：
+- 采用单例模式管理数据库连接，避免重复连接开销
+- 自动检测MindsDB服务状态，未安装时自动安装并启动
+- 封装MCP接口请求，统一处理响应和异常
+- 支持多种数据库类型的连接管理（DuckDB、MySQL、TDengine等）
+- 连接信息缓存机制，提高重复连接性能
+
+**关键功能**：
+- `connect_database()`: 连接指定类型的数据源
+- `execute_sql()`: 执行SQL语句并返回结果
+- `describe_table()`: 获取表结构信息
+
+#### 2. workflow_rag_build.py - RAG构建工作流
+**实现机制**：
+- 双模式RAG系统：优先使用MindsDB RAG，不可用时自动切换到本地RAG（ChromaDB）
+- 元数据驱动的知识库构建：自动提取数据库元数据作为知识库基础
+- 双存储架构：训练数据同时保存到JSON文件和向量数据库
+- 增量更新机制：支持数据库变更的实时同步
+
+**关键功能**：
+- `create_kb()`: 创建RAG知识库
+- `refresh_data_dict()`: 刷新数据字典（支持增量模式）
+- `extract_metadata()`: 提取数据库元数据
+
+#### 3. workflow_rag_analysis.py - RAG分析工作流
+**实现机制**：
+- 智能路由策略：根据场景自动选择最佳查询方式
+- Vanna风格NL2SQL：利用RAG检索生成SQL prompt
+- 多引擎查询：支持MindsDB AI、本地RAG、规则引擎等多种查询方式
+- 结果分析与洞察：对查询结果进行智能分析
+
+**关键功能**：
+- `nl_query()`: 自然语言查询（NLP2SQL）
+- `smart_query()`: 智能查询（自动选择最佳方式）
+- `query_kb()`: 知识库智能问答
+
+#### 4. data_dictionary.py - 数据字典实现
+**实现机制**：
+- 增量更新算法：基于时间戳检测数据库变更
+- 智能合并策略：保留现有数据，只更新变更部分
+- 关系检测：自动识别表间关联关系
+- 持久化存储：自动保存到JSON文件
+
+**关键功能**：
+- `merge_with_existing()`: 合并现有数据字典
+- `get_changed_tables()`: 检测变更的表
+- `generate_summary()`: 生成数据字典摘要
+
+#### 5. metadata_extractor.py - 元数据提取模块
+**实现机制**：
+- 多源数据提取：支持从DuckDB等数据库提取元数据
+- 业务含义推断：基于表名和列名推断业务含义
+- 关系自动检测：基于外键和命名规则检测表间关系
+- 统计信息收集：收集表大小、列类型等统计信息
+
+**关键功能**：
+- `extract_metadata_from_duckdb()`: 从DuckDB提取元数据
+- `get_extraction_stats()`: 获取提取统计信息
+
+#### 6. intelligent_query.py - 智能查询引擎
+**实现机制**：
+- 意图识别：自动识别查询意图（计数、列表、统计、趋势等）
+- 实体提取：从自然语言中提取表名、列名等实体
+- SQL生成：基于意图和实体生成SQL
+- 结果处理：格式化查询结果
+
+**关键功能**：
+- `query()`: 主查询接口
+- `understand_question()`: 理解用户问题
+- `generate_sql()`: 生成SQL语句
+
+#### 7. nl2sql/ 模块 - NL2SQL核心实现
+**实现机制**：
+- 意图识别器：识别查询意图和类型
+- RAG生成器：利用知识库生成SQL
+- Schema提取器：自动提取数据库模式
+- 训练数据管理：管理DDL、SQL示例、文档等训练数据
+
+**关键功能**：
+- `engine.py`: NL2SQL引擎核心
+- `intent_recognizer.py`: 意图识别
+- `rag_generator.py`: RAG增强SQL生成
+
+### 增量更新实现原理 | Incremental Update Implementation Principle
+
+**核心原理**：
+1. **变更检测**：比较现有数据字典与数据库的时间戳
+2. **差异分析**：识别新增表、更新表、删除表
+3. **智能合并**：只更新变更部分，保留现有数据
+4. **自动同步**：更新数据字典后自动同步到RAG知识库
+
+**实现流程**：
+```
+┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  检测数据库变更  │────>│  分析变更内容    │────>│  智能合并更新    │────>│  同步到RAG知识库  │
+└─────────────────┘     └──────────────────┘     └──────────────────┘     └──────────────────┘
+```
+
+**使用方式**：
+```python
+from scripts.workflow_rag_build import rag_build_workflow_entry
+
+# 增量刷新数据字典
+params = {
+    "action": "refresh_data_dict",
+    "database": "warehouse_db",
+    "mode": "incremental"  # 增量模式
+}
+result = rag_build_workflow_entry(params)
+```
 
 ---
 
@@ -166,6 +313,9 @@ This skill package is centered around RAG (Retrieval-Augmented Generation), enca
   **Universal Database Query** (v2.3.0 New): Not dependent on specific business scenarios, automatically adapts to any database structure, and intelligently searches all text fields.
 - **NL2SQL 转换**（v2.7.0新增）：完整实现 Vanna 风格的 NL2SQL 机制，支持 Agent LLM SQL 生成。核心流程：用户问题 → RAG 检索 → 生成 Prompt → Agent LLM 生成 SQL → 验证/修复 → 执行。
   **NL2SQL Conversion** (v2.7.0 New): Fully implemented Vanna-style NL2SQL mechanism, supporting Agent LLM SQL generation. Core flow: User question → RAG retrieval → Generate Prompt → Agent LLM generates SQL → Validate/Fix → Execute.
+
+- **增量更新**（v2.7.2新增）：支持数据库变更的增量同步，避免全量重建的开销。基于时间戳检测变更，只处理变更的表，智能合并更新。
+  **Incremental Update** (v2.7.2 New): Supports incremental synchronization of database changes, avoiding the overhead of full reconstruction. Detects changes based on timestamps, only processes changed tables, and intelligently merges updates.
 
 - **数据源管理**：连接多类型数据源（MySQL、DuckDB、TDengine等）、列出所有数据源、查看数据表结构。
   **Data Source Management**: Connect multiple types of data sources (MySQL, DuckDB, TDengine, etc.), list all data sources, view data table structures.
@@ -276,6 +426,47 @@ mindsdb-mcp-skill/
 ```
 
 ### 3.2 新增功能快速开始 | 3.2 Quick Start for New Features
+
+#### 增量更新 | Incremental Update
+
+```python
+from scripts.workflow_rag_build import rag_build_workflow_entry
+
+# 1. 增量刷新数据字典（默认模式）
+params = {
+    "action": "refresh_data_dict",
+    "database": "warehouse_db",
+    "mode": "incremental"  # 增量模式（默认）
+}
+result = rag_build_workflow_entry(params)
+print(result)
+
+# 返回示例：
+# {
+#   "code": 0,
+#   "msg": "Data dictionary refreshed",
+#   "data": {
+#     "database": "warehouse_db",
+#     "mode": "incremental",
+#     "force_rebuild": false,
+#     "tables_added": 2,
+#     "tables_updated": 1,
+#     "columns_added": 15,
+#     "columns_updated": 3,
+#     "relationships_added": 5,
+#     "total_changes": 26
+#   }
+# }
+
+# 2. 全量刷新数据字典（强制重建）
+params = {
+    "action": "refresh_data_dict",
+    "database": "warehouse_db",
+    "mode": "full",  # 全量模式
+    "force_rebuild": True  # 强制重建
+}
+result = rag_build_workflow_entry(params)
+```
 
 #### 元数据自动提取 | Metadata Auto-Extraction
 
@@ -483,7 +674,7 @@ print("删除知识库结果：", json.dumps(delete_result, ensure_ascii=False, 
 | delete_kb | kb_name | 无 | 删除指定名称的RAG知识库 |
 | get_data_dict_summary | 无 | 无 | 获取数据字典摘要信息 |
 | search_data_dict | keyword | 无 | 搜索数据字典中的元数据 |
-| refresh_data_dict | database | 无 | 刷新指定数据库的数据字典 |
+| refresh_data_dict | database | mode, force_rebuild | 刷新指定数据库的数据字典（支持增量模式） |
 
 ### 4.3 模块3：workflow_rag_analysis（RAG分析工作流） | 4.3 Module 3: workflow_rag_analysis (RAG Analysis Workflow)
 
@@ -499,6 +690,15 @@ print("删除知识库结果：", json.dumps(delete_result, ensure_ascii=False, 
 | create_model | model_name, predict_field | database | 创建AI预测模型 |
 
 ### 4.4 新增模块 | 4.4 New Modules
+
+#### 数据字典模块 (data_dictionary.py)
+
+| 方法 | 必传参数 | 功能说明 |
+|------|---------|----------|
+| merge_with_existing | existing_dict | 合并现有数据字典，支持增量更新 |
+| get_changed_tables | new_tables | 检测变更的表 |
+| generate_summary | 无 | 生成数据字典摘要 |
+| save_to_file | file_path | 保存数据字典到文件 |
 
 #### 元数据提取模块 (metadata_extractor.py)
 

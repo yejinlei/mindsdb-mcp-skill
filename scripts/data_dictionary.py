@@ -381,3 +381,243 @@ class DataDictionary:
             })
         
         return documents
+    
+    def get_table_last_updated(self, table_name: str) -> Optional[str]:
+        """
+        获取表的最后更新时间
+        :param table_name: 表名
+        :return: 最后更新时间（ISO格式字符串），如果表不存在返回None
+        """
+        table_meta = self.tables.get(table_name)
+        if table_meta:
+            return table_meta.get('last_updated')
+        return None
+    
+    def update_table_metadata(self, table_name: str, metadata: Dict[str, Any]) -> bool:
+        """
+        更新表元数据（增量更新）
+        :param table_name: 表名
+        :param metadata: 新的元数据
+        :return: 是否成功
+        """
+        if table_name not in self.tables:
+            self.tables[table_name] = {}
+        
+        self.tables[table_name].update(metadata)
+        self.tables[table_name]['last_updated'] = datetime.now().isoformat()
+        return True
+    
+    def remove_table(self, table_name: str) -> bool:
+        """
+        删除表及其所有列元数据
+        :param table_name: 表名
+        :return: 是否成功
+        """
+        if table_name in self.tables:
+            del self.tables[table_name]
+        
+        if table_name in self.columns:
+            del self.columns[table_name]
+        
+        # 删除相关的关系
+        keys_to_remove = []
+        for rel_key in self.relationships:
+            if (table_name in self.relationships[rel_key]['from_table'] or
+                table_name in self.relationships[rel_key]['to_table']):
+                keys_to_remove.append(rel_key)
+        
+        for key in keys_to_remove:
+            del self.relationships[key]
+        
+        return True
+    
+    def get_changed_tables(self, since: str = None) -> List[str]:
+        """
+        获取自指定时间以来变更的表
+        :param since: ISO格式的时间字符串，如果为None则返回所有表
+        :return: 变更的表名列表
+        """
+        if since is None:
+            return list(self.tables.keys())
+        
+        changed_tables = []
+        for table_name, table_meta in self.tables.items():
+            last_updated = table_meta.get('last_updated')
+            if last_updated and last_updated > since:
+                changed_tables.append(table_name)
+        
+        return changed_tables
+    
+    def merge_with_existing(self, new_data_dict: 'DataDictionary', 
+                          mode: str = 'replace') -> Dict[str, Any]:
+        """
+        合并新的数据字典到现有数据字典
+        :param new_data_dict: 新的数据字典
+        :param mode: 合并模式
+            - 'replace': 完全替换（默认）
+            - 'merge': 合并更新
+            - 'incremental': 增量更新（只更新变更的表）
+        :return: 合并统计信息
+        """
+        stats = {
+            'tables_added': 0,
+            'tables_updated': 0,
+            'tables_removed': 0,
+            'columns_added': 0,
+            'columns_updated': 0,
+            'relationships_added': 0,
+            'total_changes': 0
+        }
+        
+        if mode == 'replace':
+            # 完全替换
+            self.tables = new_data_dict.tables.copy()
+            self.columns = new_data_dict.columns.copy()
+            self.relationships = new_data_dict.relationships.copy()
+            self.business_metadata = new_data_dict.business_metadata.copy()
+            self.last_updated = datetime.now().isoformat()
+            
+            stats['tables_added'] = len(self.tables)
+            stats['columns_added'] = sum(len(cols) for cols in self.columns.values())
+            stats['relationships_added'] = len(self.relationships)
+            stats['total_changes'] = stats['tables_added'] + stats['columns_added'] + stats['relationships_added']
+            return stats
+        
+        elif mode == 'merge':
+            # 合并更新
+            for table_name, table_meta in new_data_dict.tables.items():
+                if table_name in self.tables:
+                    # 更新现有表
+                    self.tables[table_name].update(table_meta)
+                    stats['tables_updated'] += 1
+                else:
+                    # 添加新表
+                    self.tables[table_name] = table_meta.copy()
+                    stats['tables_added'] += 1
+            
+            # 合并列元数据
+            for table_name, columns in new_data_dict.columns.items():
+                if table_name not in self.columns:
+                    self.columns[table_name] = {}
+                    stats['columns_added'] += len(columns)
+                else:
+                    for col_name, col_meta in columns.items():
+                        if col_name in self.columns[table_name]:
+                            self.columns[table_name][col_name].update(col_meta)
+                            stats['columns_updated'] += 1
+                        else:
+                            self.columns[table_name][col_name] = col_meta.copy()
+                            stats['columns_added'] += 1
+            
+            # 合并关系
+            for rel_key, rel_meta in new_data_dict.relationships.items():
+                if rel_key not in self.relationships:
+                    self.relationships[rel_key] = rel_meta.copy()
+                    stats['relationships_added'] += 1
+            
+            # 合并业务元数据
+            for domain_name, domain_meta in new_data_dict.business_metadata.items():
+                if domain_name in self.business_metadata:
+                    self.business_metadata[domain_name].update(domain_meta)
+                else:
+                    self.business_metadata[domain_name] = domain_meta.copy()
+            
+            self.last_updated = datetime.now().isoformat()
+            stats['total_changes'] = (stats['tables_added'] + stats['tables_updated'] + 
+                                     stats['columns_added'] + stats['columns_updated'] + 
+                                     stats['relationships_added'])
+            return stats
+        
+        elif mode == 'incremental':
+            # 增量更新（基于时间戳）
+            current_time = self.last_updated
+            
+            for table_name, table_meta in new_data_dict.tables.items():
+                new_last_updated = table_meta.get('last_updated', '')
+                
+                # 如果新数据更新时间晚于当前时间，则更新
+                if not current_time or new_last_updated > current_time:
+                    if table_name in self.tables:
+                        self.tables[table_name].update(table_meta)
+                        stats['tables_updated'] += 1
+                    else:
+                        self.tables[table_name] = table_meta.copy()
+                        stats['tables_added'] += 1
+            
+            # 增量更新列元数据
+            for table_name, columns in new_data_dict.columns.items():
+                if table_name not in self.columns:
+                    self.columns[table_name] = {}
+                
+                for col_name, col_meta in columns.items():
+                    new_col_updated = col_meta.get('last_updated', '')
+                    existing_col = self.columns[table_name].get(col_name)
+                    
+                    if existing_col:
+                        existing_col_updated = existing_col.get('last_updated', '')
+                        if new_col_updated > existing_col_updated:
+                            self.columns[table_name][col_name].update(col_meta)
+                            stats['columns_updated'] += 1
+                    else:
+                        self.columns[table_name][col_name] = col_meta.copy()
+                        stats['columns_added'] += 1
+            
+            # 增量更新关系
+            for rel_key, rel_meta in new_data_dict.relationships.items():
+                if rel_key not in self.relationships:
+                    self.relationships[rel_key] = rel_meta.copy()
+                    stats['relationships_added'] += 1
+            
+            self.last_updated = datetime.now().isoformat()
+            stats['total_changes'] = (stats['tables_added'] + stats['tables_updated'] + 
+                                     stats['columns_added'] + stats['columns_updated'] + 
+                                     stats['relationships_added'])
+            return stats
+        
+        else:
+            raise ValueError(f"不支持的合并模式: {mode}")
+    
+    def get_version(self) -> str:
+        """
+        获取数据字典版本号
+        :return: 版本号（基于last_updated时间戳）
+        """
+        return self.last_updated or datetime.now().isoformat()
+    
+    def export_changes(self, since: str) -> Dict[str, Any]:
+        """
+        导出自指定时间以来的变更
+        :param since: ISO格式的时间字符串
+        :return: 变更数据
+        """
+        changes = {
+            'since': since,
+            'exported_at': datetime.now().isoformat(),
+            'tables': {},
+            'columns': {},
+            'relationships': {},
+            'business_metadata': {}
+        }
+        
+        # 导出变更的表
+        for table_name, table_meta in self.tables.items():
+            last_updated = table_meta.get('last_updated', '')
+            if last_updated > since:
+                changes['tables'][table_name] = table_meta
+        
+        # 导出变更的列
+        for table_name, columns in self.columns.items():
+            for col_name, col_meta in columns.items():
+                last_updated = col_meta.get('last_updated', '')
+                if last_updated > since:
+                    if table_name not in changes['columns']:
+                        changes['columns'][table_name] = {}
+                    changes['columns'][table_name][col_name] = col_meta
+        
+        # 导出变更的关系
+        for rel_key, rel_meta in self.relationships.items():
+            last_updated = rel_meta.get('last_updated', '')
+            if last_updated > since:
+                changes['relationships'][rel_key] = rel_meta
+        
+        return changes

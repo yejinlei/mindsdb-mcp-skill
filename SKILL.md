@@ -99,47 +99,20 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-**使用虚拟环境的优势**：
-- 隔离项目依赖，避免全局Python环境污染
-- 确保依赖版本一致性
-- 简化依赖管理和部署
-
 安装技能包所需依赖：
 
 ```bash
 pip install requests
 ```
 
-#### 元数据提取（示例）| Metadata Extraction (Example)
-
-元数据自动提取功能以DuckDB为例，实际使用时无需安装duckdb：
-```bash
-# 示例：如果需要使用DuckDB作为数据源
-# pip install duckdb
-```
-
 #### MindsDB自动安装与启动 | MindsDB Automatic Installation and Startup
 
-本技能支持自动检测、安装和启动MindsDB服务，无需手动操作：
+本技能支持自动检测、安装和启动MindsDB服务：
 
-- **自动检测**：首次使用时会检查MindsDB是否已安装
-- **自动安装**：如果未安装，自动执行 `pip install mindsdb`
-- **自动启动**：自动启动MindsDB服务（默认端口47334）
-- **服务验证**：验证MindsDB服务是否正常运行
-
-#### 手动安装选项 | Manual Installation Option
-
-如果您希望手动安装和配置MindsDB：
-
-```bash
-# 安装MindsDB
-pip install mindsdb
-
-# 启动MindsDB服务
-python -m mindsdb
-```
-
-确保MindsDB服务在默认端口47334上运行。
+- **自动检测**：检查MindsDB是否已安装
+- **自动安装**：未安装时自动执行 `pip install mindsdb`
+- **自动启动**：启动MindsDB服务（默认端口47334）
+- **服务验证**：验证服务是否正常运行
 
 #### 本地RAG依赖 | Local RAG Dependencies
 
@@ -173,6 +146,8 @@ python -m mindsdb
 ```
 
 ### 快速开始 | Quick Start
+
+> **增量更新**：当目标数据库新增数据时，支持增量更新避免全量重建。详见 `references/incremental-update.md`。
 
 #### 方式1：使用元数据提取模块 | Method 1: Use Metadata Extraction Module
 
