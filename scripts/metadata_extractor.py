@@ -145,12 +145,18 @@ class MetadataExtractor:
             'sample_rows_collected': 0
         }
     
-    def extract_from_duckdb(self, db_path: str) -> DataDictionary:
+    def extract_from_duckdb(self, db_path: str, 
+                           existing_data_dict: DataDictionary = None,
+                           mode: str = 'full') -> DataDictionary:
         """
         从DuckDB数据库提取元数据
         
         Args:
             db_path: DuckDB数据库文件路径
+            existing_data_dict: 现有的数据字典（用于增量更新）
+            mode: 提取模式
+                - 'full': 全量提取（默认）
+                - 'incremental': 增量提取（基于时间戳）
             
         Returns:
             填充好的DataDictionary对象
@@ -159,22 +165,48 @@ class MetadataExtractor:
             import duckdb
             
             conn = duckdb.connect(db_path, read_only=True)
-            self.data_dictionary = DataDictionary()
             
-            # 1. 获取所有表
+            if mode == 'full' or existing_data_dict is None:
+                # 全量提取
+                self.data_dictionary = DataDictionary()
+            else:
+                # 增量提取：使用现有数据字典
+                self.data_dictionary = existing_data_dict
+            
+            # 获取所有表
             tables = conn.execute("SHOW TABLES").fetchall()
+            table_names = [table_row[0] for table_row in tables]
             
-            for table_row in tables:
-                table_name = table_row[0]
-                self._extract_table_metadata(conn, table_name)
-                self._extract_columns_metadata(conn, table_name)
-                self._extract_sample_data(conn, table_name)
+            if mode == 'incremental':
+                # 增量模式：只处理变更的表
+                last_updated = existing_data_dict.last_updated
+                changed_tables = self._get_changed_tables(conn, table_names, last_updated)
+                print(f"增量提取：发现 {len(changed_tables)} 个变更的表")
+                
+                for table_name in changed_tables:
+                    self._extract_table_metadata(conn, table_name)
+                    self._extract_columns_metadata(conn, table_name)
+                    self._extract_sample_data(conn, table_name)
+            else:
+                # 全量模式：处理所有表
+                for table_name in table_names:
+                    self._extract_table_metadata(conn, table_name)
+                    self._extract_columns_metadata(conn, table_name)
+                    self._extract_sample_data(conn, table_name)
             
             # 2. 检测表关系
-            self._detect_relationships(conn)
+            if mode == 'full':
+                self._detect_relationships(conn)
+            else:
+                # 增量模式：只检测变更表的关系
+                self._detect_relationships_incremental(conn, table_names)
             
             # 3. 推断业务域
-            self._infer_business_domains()
+            if mode == 'full':
+                self._infer_business_domains()
+            else:
+                # 增量模式：更新业务域
+                self._infer_business_domains()
             
             conn.close()
             
@@ -183,6 +215,85 @@ class MetadataExtractor:
         except Exception as e:
             print(f"从DuckDB提取元数据失败: {e}")
             raise
+    
+    def _get_changed_tables(self, conn, table_names: List[str], 
+                          since: str = None) -> List[str]:
+        """
+        获取自指定时间以来变更的表
+        :param conn: 数据库连接
+        :param table_names: 所有表名
+        :param since: ISO格式的时间字符串
+        :return: 变更的表名列表
+        """
+        if since is None:
+            return table_names
+        
+        changed_tables = []
+        
+        for table_name in table_names:
+            try:
+                # 尝试获取表的最后修改时间
+                # DuckDB 不直接提供表的修改时间，使用行数变化作为替代
+                result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+                current_row_count = result[0] if result else 0
+                
+                # 检查现有数据字典中的行数
+                existing_meta = self.data_dictionary.get_table_metadata(table_name)
+                if existing_meta:
+                    existing_row_count = existing_meta.get('row_count', 0)
+                    # 如果行数变化，认为表有变更
+                    if current_row_count != existing_row_count:
+                        changed_tables.append(table_name)
+                        print(f"  表 {table_name} 行数变化: {existing_row_count} -> {current_row_count}")
+                else:
+                    # 新表
+                    changed_tables.append(table_name)
+                    print(f"  新表: {table_name}")
+            except Exception as e:
+                print(f"  检查表 {table_name} 变更失败: {e}")
+                # 出错时保守处理，认为表有变更
+                changed_tables.append(table_name)
+        
+        return changed_tables
+    
+    def _detect_relationships_incremental(self, conn, table_names: List[str]):
+        """
+        增量检测表关系（只检测变更表的关系）
+        :param conn: 数据库连接
+        :param table_names: 表名列表
+        """
+        try:
+            # 只检测变更表的关系
+            for table_name in table_names:
+                # 检查外键关系
+                columns_info = conn.execute(f"DESCRIBE {table_name}").fetchall()
+                
+                for col_info in columns_info:
+                    column_name = col_info[0]
+                    
+                    # 检测外键关系
+                    if column_name.lower().endswith('_id') and not column_name.lower() == 'id':
+                        # 推断目标表名
+                        target_table = column_name[:-3]  # 移除 '_id'
+                        
+                        # 检查目标表是否存在
+                        target_tables = [t[0] for t in conn.execute("SHOW TABLES").fetchall()]
+                        if target_table in target_tables:
+                            self.data_dictionary.add_relationship(
+                                from_table=table_name,
+                                from_column=column_name,
+                                to_table=target_table,
+                                to_column='id',
+                                relationship_type='foreign_key',
+                                metadata={
+                                    'description': f'{table_name}.{column_name} 引用 {target_table}.id',
+                                    'business_rule': '一对多关系'
+                                }
+                            )
+                            self.extraction_stats['relationships_detected'] += 1
+            
+        except Exception as e:
+            print(f"增量检测表关系失败: {e}")
     
     def _extract_table_metadata(self, conn, table_name: str):
         """提取表级元数据"""
