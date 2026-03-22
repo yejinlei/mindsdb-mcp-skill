@@ -1,0 +1,82 @@
+[
+  {
+    "query": "我需要查询 MySQL 数据库中 users 表的所有数据，连接信息是 localhost:3306，用户名 root，密码 password123",
+    "should_trigger": true
+  },
+  {
+    "query": "帮我分析一下销售数据，找出上个月销量最高的前10个产品",
+    "should_trigger": true
+  },
+  {
+    "query": "我想用自然语言查询数据库，比如'查询所有活跃用户'这种，有没有办法实现？",
+    "should_trigger": true
+  },
+  {
+    "query": "老板让我做个数据报表，数据库是 PostgreSQL，但我不会写 SQL，能帮帮我吗",
+    "should_trigger": true
+  },
+  {
+    "query": "连接到 DuckDB 文件 data/sales.duckdb，查看里面有哪些表",
+    "should_trigger": true
+  },
+  {
+    "query": "我想给数据库建个知识库，这样以后可以用自然语言查询",
+    "should_trigger": true
+  },
+  {
+    "query": "帮我写个 SQL 查询，从 orders 表中统计每个客户的订单数量",
+    "should_trigger": false
+  },
+  {
+    "query": "这个查询结果不对，应该用 NL2SQL 来做，数据库是 warehouse_db",
+    "should_trigger": true
+  },
+  {
+    "query": "分析一下周报数据，看看哪个部门工作量最大",
+    "should_trigger": true
+  },
+  {
+    "query": "我有个 CSV 文件想导入数据库，怎么做？",
+    "should_trigger": false
+  },
+  {
+    "query": "查询 TDengine 时序数据库中电量相关的表，地址是 10.10.10.13:6060",
+    "should_trigger": true
+  },
+  {
+    "query": "帮我优化这个 SQL 语句的性能",
+    "should_trigger": false
+  },
+  {
+    "query": "创建一个预测模型，预测下个月的销售额",
+    "should_trigger": true
+  },
+  {
+    "query": "数据库连接池怎么配置？",
+    "should_trigger": false
+  },
+  {
+    "query": "用智能查询找出所有状态为进行中的项目",
+    "should_trigger": true
+  },
+  {
+    "query": "我想了解这个数据库的表结构，能自动提取元数据吗？",
+    "should_trigger": true
+  },
+  {
+    "query": "写一个 Python 脚本连接数据库",
+    "should_trigger": false
+  },
+  {
+    "query": "统计卡点数量，数据库是 warehouse_db",
+    "should_trigger": true
+  },
+  {
+    "query": "数据库事务怎么处理？",
+    "should_trigger": false
+  },
+  {
+    "query": "我想搜索包含'供应链'的所有记录，但不知道在哪个表",
+    "should_trigger": true
+  }
+]

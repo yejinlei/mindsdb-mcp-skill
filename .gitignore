@@ -45,6 +45,7 @@ logs/
 *.tmp
 *.bak
 *.cache
+scripts/temp/
 
 # Data files
 data/
@@ -53,6 +54,31 @@ data/
 *.sqlite
 *.sqlite3
 chromadb_persist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Test and eval temporary files
+SKILL_OPTIMIZED.md
+evals/trigger_eval_review.html
 
 # Debug and test files
 check_*.py

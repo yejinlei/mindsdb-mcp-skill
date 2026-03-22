@@ -54,7 +54,9 @@ class NL2SQLEngine:
                 tables = conn.execute("SHOW TABLES").fetchall()
                 table_names = [table[0] for table in tables]
                 
-                for table in table_names:
+                # 可配置的最大表数，避免过多请求
+                max_tables = 10  # 默认处理前10个表
+                for table in table_names[:max_tables]:
                     schema = conn.execute(f"DESCRIBE {table}").fetchall()
                     columns = []
                     for col_info in schema:
@@ -70,7 +72,9 @@ class NL2SQLEngine:
                     if 'data' in tables_data:
                         table_names = [row[0] for row in tables_data['data'] if row]
                         
-                        for table in table_names:
+                        # 可配置的最大表数，避免过多请求
+                        max_tables = 10  # 默认处理前10个表
+                        for table in table_names[:max_tables]:
                             describe_result = self.db_connector.describe_table(database, table)
                             if describe_result.get('code') == 0:
                                 schema_data = describe_result.get('data', {})

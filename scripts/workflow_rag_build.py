@@ -272,43 +272,50 @@ class RAGBuildWorkflow:
             db_list_result = self.db_connector.list_databases(host, port)
             if db_list_result.get("code") == 0:
                 databases = [row[0] for row in db_list_result.get("data", {}).get("data", [])]
-            
-            # 尝试获取周报相关数据
-            if databases:
-                weekly_report_db = None
-                for db in databases:
-                    if "weekly" in db.lower() or "周报" in db:
-                        weekly_report_db = db
-                        break
                 
-                if not weekly_report_db and databases:
-                    weekly_report_db = databases[0]
-                
-                if weekly_report_db:
+                # 处理指定的数据库
+                if database and database != "default":
                     # 使用公共连接器获取表列表
-                    tables_result = self.db_connector.show_tables(weekly_report_db, host, port)
+                    tables_result = self.db_connector.show_tables(database, host, port)
                     tables = []
                     if tables_result.get("code") == 0:
                         tables = [row[0] for row in tables_result.get("data", {}).get("data", [])]
                     
                     # 提取数据并添加到RAG
                     if tables:
-                        for table in tables:
+                        max_tables = params.get("max_tables", 10)  # 可配置的最大表数，默认10
+                        print(f"正在处理数据库 {database} 的 {len(tables)} 个表（限制前 {max_tables} 个）...")
+                        for table in tables[:max_tables]:
+                            print(f"\n处理表: {table}")
                             # 使用公共连接器获取表结构
                             columns = []
-                            describe_result = self.db_connector.describe_table(weekly_report_db, table, host, port)
+                            describe_result = self.db_connector.describe_table(database, table, host, port)
+                            print(f"  describe_table 结果: {describe_result.get('code')}")
                             if describe_result.get("code") == 0:
-                                columns = [row[0] for row in describe_result.get("data", {}).get("data", [])]
+                                data = describe_result.get("data", {})
+                                print(f"  返回数据: {data}")
+                                if "data" in data and isinstance(data["data"], list):
+                                    columns = [row[0] for row in data["data"] if row]
+                                    print(f"  表结构列数: {len(columns)}")
+                                elif "columns" in data:
+                                    columns = data["columns"]
+                                    print(f"  表结构列数: {len(columns)}")
+                                else:
+                                    print(f"  数据结构: {list(data.keys())}")
                             
                             # 使用公共连接器获取表数据
                             if columns:
+                                print(f"  获取表数据...")
                                 data_result = self.db_connector.execute_sql(
-                                    f"SELECT * FROM {weekly_report_db}.{table} LIMIT 10",
+                                    f"SELECT * FROM {database}.{table} LIMIT 10",
                                     host, port
                                 )
                                 data = []
                                 if data_result.get("code") == 0:
                                     data = data_result.get("data", {}).get("data", [])
+                                    print(f"  获取到 {len(data)} 行数据")
+                                else:
+                                    print(f"  获取表数据失败: {data_result.get('msg')}")
                                 
                                 # 添加数据到RAG
                                 for i, row in enumerate(data):
@@ -322,10 +329,24 @@ class RAGBuildWorkflow:
                                         collection.add(
                                             ids=[f"{table}_{i}"],
                                             documents=[doc],
-                                            metadatas=[{"source": "database", "table": table, "database": weekly_report_db}]
+                                            metadatas=[{"source": "database", "table": table, "database": database}]
                                         )
                                     except Exception as e:
                                         print(f"添加数据失败: {e}")
+                            else:
+                                print(f"  跳过表 {table}（没有列信息）")
+                            
+                            # 添加表结构到RAG
+                            if columns:
+                                schema_doc = f"表 {table} 结构: " + ", ".join(columns)
+                                try:
+                                    collection.add(
+                                        ids=[f"{table}_schema"],
+                                        documents=[schema_doc],
+                                        metadatas=[{"source": "schema", "table": table, "database": database}]
+                                    )
+                                except Exception as e:
+                                    print(f"添加表结构失败: {e}")
             
             # 提取数据字典
             self._add_data_dictionary_to_rag()

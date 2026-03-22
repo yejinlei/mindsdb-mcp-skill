@@ -221,7 +221,8 @@ class DBConnector:
     
     def describe_table(self, database: str, table: str, host: str = None, port: int = None) -> Dict[str, Any]:
         """描述表结构"""
-        return self.send_mcp_request(f"DESCRIBE {database}.{table}", host, port)
+        # TDengine 使用 SHOW COLUMNS FROM 而不是 DESCRIBE
+        return self.send_mcp_request(f"SHOW COLUMNS FROM {database}.{table}", host, port)
     
     def execute_sql(self, sql: str, host: str = None, port: int = None) -> Dict[str, Any]:
         """执行SQL查询"""

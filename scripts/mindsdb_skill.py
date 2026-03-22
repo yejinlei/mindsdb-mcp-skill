@@ -1138,37 +1138,19 @@ class MindsDBSkill:
                                 print(f"提取数据字典...")
                                 self._extract_metadata_from_database(weekly_report_db, tables, mcp_paths, timeout)
                         else:
-                            print("未找到周报相关数据库")
-                            # 使用模拟数据作为 fallback
-                            weekly_report_data = [
-                                "周报：张三完成了项目A的需求分析，李四完成了项目B的代码实现",
-                                "周报：王五负责的项目C已经进入测试阶段，赵六协助完成了文档编写",
-                                "周报：孙七完成了项目D的部署，周八参与了项目E的需求讨论"
-                            ]
-                            # 向向量数据库添加数据
-                            if hasattr(self, 'embedding_model') and self.embedding_model:
-                                for i, doc in enumerate(weekly_report_data):
-                                    collection.add(
-                                        ids=[f"doc_{i}"],
-                                        documents=[doc],
-                                        metadatas=[{"source": "weekly_report", "id": i, "database": database}]
-                                    )
+                            print("未找到相关数据库")
+                            return self._generate_response(-11, "未找到相关数据库，无法创建知识库", {
+                                "kb_name": kb_name,
+                                "database": database,
+                                "status": "failed"
+                            })
                     except Exception as e:
                         print(f"通过MCP接口获取数据失败: {e}")
-                        # 使用模拟数据作为 fallback
-                        weekly_report_data = [
-                            "周报：张三完成了项目A的需求分析，李四完成了项目B的代码实现",
-                            "周报：王五负责的项目C已经进入测试阶段，赵六协助完成了文档编写",
-                            "周报：孙七完成了项目D的部署，周八参与了项目E的需求讨论"
-                        ]
-                        # 向向量数据库添加数据
-                        if hasattr(self, 'embedding_model') and self.embedding_model:
-                            for i, doc in enumerate(weekly_report_data):
-                                collection.add(
-                                    ids=[f"doc_{i}"],
-                                    documents=[doc],
-                                    metadatas=[{"source": "weekly_report", "id": i, "database": database}]
-                                )
+                        return self._generate_response(-11, f"获取数据失败: {str(e)}", {
+                            "kb_name": kb_name,
+                            "database": database,
+                            "status": "failed"
+                        })
                 
                 return self._generate_response(0, "Local RAG knowledge base created (with persistence)", {
                     "kb_name": kb_name,

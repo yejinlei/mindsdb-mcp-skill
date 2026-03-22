@@ -350,7 +350,13 @@ class IntelligentQueryEngine:
 
 def demo():
     """演示智能查询"""
-    db_path = r"f:\src\tmp\周报智能分析\weekly_report_warehouse.duckdb"
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="智能查询引擎演示")
+    parser.add_argument("--db-path", required=True, help="数据库文件路径")
+    
+    args = parser.parse_args()
+    db_path = args.db_path
     
     print("=" * 70)
     print("智能查询引擎演示")

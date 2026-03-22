@@ -1,0 +1,8 @@
+{
+  "original_description": "MindsDB MCP服务器交互技能，采用三模块架构，支持通过自然语言查询和操作200+企业级数据源，提供RAG知识库构建、NLP2SQL转换、智能数据分析和元数据自动提取能力。**务必使用此技能**当用户需要查询数据库、分析数据、构建知识库、进行自然语言到SQL转换、搜索数据、执行SQL、创建数据模型、连接MySQL/PostgreSQL/DuckDB等数据库、处理周报/报表数据、进行数据分析或任何与数据库交互相关的任务时。即使任务看起来简单，只要涉及数据库操作，就应该使用此技能。 | MindsDB MCP server interaction skill with three-module architecture, supporting natural language query and operation of 200+ enterprise data sources, providing RAG knowledge base construction, NLP2SQL conversion, intelligent data analysis, and metadata auto-extraction capabilities. **Be sure to use this skill** when users need to query databases, analyze data, build knowledge bases, perform natural language to SQL conversion, search data, execute SQL, create data models, connect to MySQL/PostgreSQL/DuckDB databases, process weekly reports/dashboard data, perform data analysis, or any task related to database interaction. Even if the task appears simple, as long as it involves database operations, this skill should be used.",
+  "optimized_description": "MindsDB MCP服务器交互技能，支持通过自然语言查询和操作200+企业级数据源。核心功能包括：1) 数据库连接与查询（MySQL、PostgreSQL、DuckDB、TDengine等）；2) NL2SQL自然语言转SQL；3) RAG知识库构建与智能问答；4) 数据分析与可视化；5) AI预测模型创建；6) 元数据自动提取。**触发场景**：当用户需要查询数据库、分析数据、构建知识库、自然语言转SQL、搜索数据、创建预测模型、提取数据库元数据、或进行任何实际数据库操作时使用。**不触发场景**：纯SQL编写、SQL性能优化、数据库配置问题、编程脚本编写等非实际数据库操作场景。",
+  "analysis": {
+    "trigger_count": 14,
+    "no_trigger_count": 6
+  }
+}

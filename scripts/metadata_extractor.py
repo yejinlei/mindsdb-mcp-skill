@@ -507,9 +507,17 @@ def extract_metadata_from_duckdb(db_path: str, save_path: str = None) -> Tuple[D
 
 
 if __name__ == "__main__":
+    import argparse
+    
     # 测试代码
-    db_path = r"f:\src\tmp\周报智能分析\weekly_report_warehouse.duckdb"
-    save_path = r"f:\src\tmp\周报智能分析\metadata_dictionary.json"
+    parser = argparse.ArgumentParser(description="从数据库提取元数据")
+    parser.add_argument("--db-path", required=True, help="数据库文件路径")
+    parser.add_argument("--save-path", required=True, help="保存路径")
+    
+    args = parser.parse_args()
+    
+    db_path = args.db_path
+    save_path = args.save_path
     
     print("开始提取元数据...")
     data_dict, stats = extract_metadata_from_duckdb(db_path, save_path)

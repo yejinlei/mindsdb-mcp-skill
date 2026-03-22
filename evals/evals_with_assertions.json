@@ -1,0 +1,314 @@
+{
+  "skill_name": "mindsdb-mcp-skill",
+  "version": "2.7.0",
+  "architecture": "three-module",
+  "modules": {
+    "db_connector": "公共数据库连接模块",
+    "workflow_rag_build": "本地RAG构建与管理工作流",
+    "workflow_rag_analysis": "基于RAG的NLP2SQL和数据分析工作流"
+  },
+  "evals": [
+    {
+      "id": 1,
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "连接到DuckDB数据库文件weekly_report_warehouse.duckdb",
+      "expected_output": "应该成功创建数据库连接，返回连接成功的响应",
+      "action": "connect_db",
+      "params": {
+        "db_type": "duckdb",
+        "db_path": "data/weekly_report_warehouse.duckdb",
+        "database": "warehouse_db"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回连接信息",
+          "check": "'connected' in response.get('msg', '').lower() or 'success' in response.get('msg', '').lower()"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "列出所有已连接的数据库",
+      "expected_output": "应该返回所有数据库的列表，包括系统数据库和用户数据库",
+      "action": "list_databases",
+      "params": {},
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回数据列表",
+          "check": "'data' in response and isinstance(response.get('data'), dict)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "查看warehouse_db数据库中的所有表",
+      "expected_output": "应该返回warehouse_db数据库中的所有表名列表",
+      "action": "show_tables",
+      "params": {
+        "database": "warehouse_db"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回表列表",
+          "check": "'data' in response and 'data' in response.get('data', {})"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "查看odw_project表的结构",
+      "expected_output": "应该返回odw_project表的列名、数据类型等信息",
+      "action": "describe_table",
+      "params": {
+        "database": "warehouse_db",
+        "table": "odw_project"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回表结构信息",
+          "check": "'data' in response"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "module": "db_connector",
+      "workflow": "database_connection",
+      "prompt": "执行SQL查询：SELECT * FROM odw_project LIMIT 5",
+      "expected_output": "应该返回odw_project表的前5行数据",
+      "action": "execute_sql",
+      "params": {
+        "sql": "SELECT * FROM warehouse_db.odw_project LIMIT 5"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回查询数据",
+          "check": "'data' in response and 'data' in response.get('data', {})"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "module": "workflow_rag_build",
+      "workflow": "rag_build",
+      "prompt": "创建一个名为weekly_report_kb的RAG知识库",
+      "expected_output": "应该初始化本地RAG系统，创建知识库，并返回创建成功的响应",
+      "action": "create_kb",
+      "params": {
+        "kb_name": "weekly_report_kb",
+        "database": "warehouse_db"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回知识库信息",
+          "check": "'data' in response and 'kb_name' in response.get('data', {})"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "module": "workflow_rag_build",
+      "workflow": "rag_build",
+      "prompt": "列出所有已创建的RAG知识库",
+      "expected_output": "应该返回所有知识库的列表和状态信息",
+      "action": "list_kb",
+      "params": {},
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回知识库列表",
+          "check": "'data' in response and 'kbs' in response.get('data', {})"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "module": "workflow_rag_build",
+      "workflow": "rag_build",
+      "prompt": "获取数据字典的摘要信息",
+      "expected_output": "应该返回数据字典的统计信息，包括表数量、列数量等",
+      "action": "get_data_dict_summary",
+      "params": {},
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回摘要信息",
+          "check": "'data' in response"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "module": "workflow_rag_analysis",
+      "workflow": "rag_analysis",
+      "prompt": "使用自然语言查询：查询所有项目的状态",
+      "expected_output": "应该将自然语言转换为SQL并执行查询，返回项目状态数据",
+      "action": "nl_query",
+      "params": {
+        "database": "warehouse_db",
+        "nl_text": "查询所有项目的状态"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回查询结果",
+          "check": "'data' in response"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "module": "workflow_rag_analysis",
+      "workflow": "rag_analysis",
+      "prompt": "执行SQL查询获取部门项目统计",
+      "expected_output": "应该执行SQL查询并返回结果",
+      "action": "exec_sql",
+      "params": {
+        "database": "warehouse_db",
+        "sql": "SELECT department_id, COUNT(*) as project_count FROM odw_project GROUP BY department_id"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回查询数据",
+          "check": "'data' in response"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "module": "workflow_rag_analysis",
+      "workflow": "nl2sql",
+      "prompt": "查询所有部门信息",
+      "expected_output": "应该使用NL2SQL功能，生成并执行SQL查询，返回所有部门信息",
+      "action": "nl2sql",
+      "params": {
+        "action": "nl2sql",
+        "database": "warehouse_db",
+        "nl_text": "查询所有部门信息"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回SQL查询结果",
+          "check": "'data' in response and 'sql' in response.get('data', {})"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "module": "workflow_rag_analysis",
+      "workflow": "smart_query",
+      "prompt": "智能查询：查询所有部门信息",
+      "expected_output": "应该自动选择最佳查询方式并返回结果，包含 route_info",
+      "action": "smart_query",
+      "params": {
+        "action": "smart_query",
+        "database": "warehouse_db",
+        "nl_text": "查询所有部门信息"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "返回路由信息",
+          "check": "'data' in response and 'route_info' in response.get('data', {})"
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "module": "nl2sql",
+      "workflow": "intent_recognition",
+      "prompt": "测试意图识别：统计卡点数量",
+      "expected_output": "应该识别意图类型为 count，目标为卡点，实体映射为 issues",
+      "action": "test_intent",
+      "params": {
+        "action": "test_intent",
+        "nl_text": "统计卡点数量"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态码",
+          "check": "response.get('code') == 0"
+        },
+        {
+          "name": "识别意图类型",
+          "check": "'data' in response and 'intent_type' in response.get('data', {})"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "module": "nl2sql",
+      "workflow": "schema_extraction",
+      "prompt": "自动提取 DuckDB 数据库的 Schema",
+      "expected_output": "应该提取所有表结构，推断业务术语映射",
+      "action": "extract_schema",
+      "params": {
+        "action": "extract_schema",
+        "db_type": "duckdb",
+        "db_path": "data/weekly_report_warehouse.duckdb",
+        "database": "warehouse_db"
+      },
+      "assertions": [
+        {
+          "name": "返回成功状态",
+          "check": "response.get('status') == 'success'"
+        },
+        {
+          "name": "返回表结构",
+          "check": "'tables' in response"
+        }
+      ]
+    }
+  ]
+}

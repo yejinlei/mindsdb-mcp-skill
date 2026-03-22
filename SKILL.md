@@ -1,7 +1,7 @@
 ---
 name: mindsdb-mcp-skill
-description: MindsDB MCP服务器交互技能，采用三模块架构，支持通过自然语言查询和操作200+企业级数据源，提供RAG知识库构建、NLP2SQL转换、智能数据分析和元数据自动提取能力。**务必使用此技能**当用户需要查询数据库、分析数据、构建知识库、进行自然语言到SQL转换、搜索数据、执行SQL、创建数据模型、连接MySQL/PostgreSQL/DuckDB等数据库、处理周报/报表数据、进行数据分析或任何与数据库交互相关的任务时。即使任务看起来简单，只要涉及数据库操作，就应该使用此技能。 | MindsDB MCP server interaction skill with three-module architecture, supporting natural language query and operation of 200+ enterprise data sources, providing RAG knowledge base construction, NLP2SQL conversion, intelligent data analysis, and metadata auto-extraction capabilities. **Be sure to use this skill** when users need to query databases, analyze data, build knowledge bases, perform natural language to SQL conversion, search data, execute SQL, create data models, connect to MySQL/PostgreSQL/DuckDB databases, process weekly reports/dashboard data, perform data analysis, or any task related to database interaction. Even if the task appears simple, as long as it involves database operations, this skill should be used.
-version: 2.7.0
+description: MindsDB MCP服务器交互技能，支持通过自然语言查询和操作200+企业级数据源。核心功能包括：1) 数据库连接与查询；2) NL2SQL自然语言转SQL；3) RAG知识库构建与智能问答；4) 数据分析与可视化；5) AI预测模型创建；6) 元数据自动提取。**触发场景**：当用户需要查询数据库、分析数据、构建知识库、自然语言转SQL、搜索数据、创建预测模型、提取数据库元数据、或进行任何实际数据库操作时使用。**不触发场景**：纯SQL编写、SQL性能优化、数据库配置问题、编程脚本编写等非实际数据库操作场景。 | MindsDB MCP server interaction skill supporting natural language queries and operations on 200+ enterprise data sources. Core features: 1) Database connection and queries; 2) NL2SQL natural language to SQL; 3) RAG knowledge base construction and intelligent Q&A; 4) Data analysis and visualization; 5) AI prediction model creation; 6) Automatic metadata extraction. **Trigger scenarios**: Use when users need to query databases, analyze data, build knowledge bases, convert natural language to SQL, search data, create prediction models, extract database metadata, or perform any actual database operations. **No-trigger scenarios**: Pure SQL writing, SQL performance optimization, database configuration issues, programming script writing, and other non-actual database operation scenarios.
+version: 2.7.2
 author: yejinlei
 ---
 
@@ -19,7 +19,7 @@ A universal database interaction skill based on the MindsDB MCP protocol, featur
 - **职责**：统一管理数据库连接，封装MCP请求
 - **功能**：
   - MindsDB服务自动检测、安装和启动
-  - 数据库连接管理（DuckDB、MySQL、TDengine等）
+  - 数据库连接管理（支持200+企业级数据源）
   - 统一MCP请求发送和响应处理
   - 连接信息缓存
 
@@ -47,7 +47,7 @@ A universal database interaction skill based on the MindsDB MCP protocol, featur
 
 - **自然语言到SQL转换**：将用户的自然语言查询自动转换为可执行的SQL语句，无需用户编写SQL
 - **元数据自动提取**：自动理解数据库结构，无需手动配置即可进行智能查询
-- **多数据源管理**：通过MindsDB HTTP API统一管理和操作200+企业级数据源，包括MySQL、DuckDB、TDengine、PostgreSQL、MongoDB、ClickHouse、Snowflake等
+- **多数据源管理**：通过MindsDB HTTP API统一管理和操作200+企业级数据源，包括关系型数据库、时序数据库、文档数据库、数据仓库等各类数据源
 - **RAG知识库构建与查询**：基于数据库数据构建知识库，支持智能问答和文档检索，提升数据分析能力
 - **本地RAG备用方案**：当MindsDB未配置embedding model时，自动切换到本地RAG（ChromaDB + all-MiniLM-L6-v2）
 - **AI模型训练与预测**：基于数据源创建AI预测模型，进行数据预测和分析
