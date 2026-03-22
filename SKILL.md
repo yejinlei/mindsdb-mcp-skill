@@ -15,6 +15,18 @@ A universal database interaction skill based on the MindsDB MCP protocol, featur
 
 本技能采用**三模块架构**，职责分离清晰，便于维护和扩展：
 
+### 核心原则 | Core Principles
+
+> **重要**：在进行任何 NL2SQL 或智能分析之前，必须先获取以下信息：
+> 1. **数据库元信息**：表结构、列信息、数据类型等
+> 2. **数据字典**：业务含义、字段说明、关联关系
+> 3. **RAG 知识库**：已有的训练数据、SQL 示例、文档
+>
+> **数据获取优先级**：
+> 1. **首选 MindsDB**：通过 MindsDB MCP 协议获取目标数据库信息（MindsDB 支持 200+ 数据源）
+> 2. **备选直连**：如 MindsDB 不可用，才直连目标数据库（如 DuckDB）
+> 3. **RAG 增强**：利用已有训练数据和向量库进行语义检索和 SQL 生成增强
+
 ### 模块1：db_connector（公共数据库连接模块）
 - **职责**：统一管理数据库连接，封装MCP请求
 - **功能**：
@@ -27,6 +39,7 @@ A universal database interaction skill based on the MindsDB MCP protocol, featur
 - **职责**：构建和维护本地RAG知识库
 - **功能**：
   - 本地RAG系统初始化（ChromaDB + all-MiniLM-L6-v2）
+  - **双存储架构**：支持 JSON 文件 + 向量数据库混合存储
   - 知识库管理（创建、列表、删除）
   - 数据字典管理（获取、搜索、刷新）
   - 元数据自动提取：自动从数据库提取表结构、列信息、业务含义
@@ -50,6 +63,7 @@ A universal database interaction skill based on the MindsDB MCP protocol, featur
 - **多数据源管理**：通过MindsDB HTTP API统一管理和操作200+企业级数据源，包括关系型数据库、时序数据库、文档数据库、数据仓库等各类数据源
 - **RAG知识库构建与查询**：基于数据库数据构建知识库，支持智能问答和文档检索，提升数据分析能力
 - **本地RAG备用方案**：当MindsDB未配置embedding model时，自动切换到本地RAG（ChromaDB + all-MiniLM-L6-v2）
+- **双存储架构**：训练数据、元数据同时保存到 JSON 文件和向量数据库，兼顾可读性和语义检索能力
 - **AI模型训练与预测**：基于数据源创建AI预测模型，进行数据预测和分析
 - **跨源数据分析**：支持多数据源联动查询与分析，提供统一的结果格式
 - **通用数据库查询**：不依赖特定业务场景，自动适应任何数据库结构，对所有文本字段进行智能搜索
@@ -132,6 +146,31 @@ python -m mindsdb
 当MindsDB RAG不可用时，技能会自动安装以下依赖：
 - **chromadb**：轻量级向量数据库
 - **sentence-transformers**：提供all-MiniLM-L6-v2嵌入模型
+
+#### 双存储架构 | Dual Storage Architecture
+
+本技能采用**双存储架构**，兼顾 JSON 文件的可读性和向量数据库的语义检索能力：
+
+| 存储类型 | 用途 | 优势 |
+|----------|------|------|
+| JSON 文件 | 训练数据（DLL、SQL示例、文档）主存储 | 便于版本控制、迁移、调试 |
+| ChromaDB 向量库 | 语义相似度检索索引 | 支持模糊查询、语义匹配 |
+
+**工作流程**：
+1. 添加训练数据时，同时写入 JSON 文件和向量数据库
+2. 检索时采用**混合检索**：向量相似度 + JSON 精确匹配，合并结果后返回
+3. 启动时自动将 JSON 文件同步到向量数据库
+
+**使用示例**：
+```python
+# 初始化时自动双存储
+# workflow_rag_build.py 会初始化训练数据收集器
+
+# 添加训练数据（自动双存储）
+# 训练数据会同时保存到：
+#   - data/training_data/*.json
+#   - ChromaDB 向量库
+```
 
 ### 快速开始 | Quick Start
 

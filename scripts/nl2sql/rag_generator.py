@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RAG 检索增强生成模块 - Vanna 风格
+RAG 检索增强生成模块 - Vanna 风格 + 双存储混合检索
 基于训练数据检索，生成 SQL 查询
 支持 Agent LLM SQL 生成
 支持意图识别增强
+支持向量检索 + JSON 精确匹配混合检索
 """
 
 import os
@@ -21,7 +22,13 @@ from intent_recognizer import IntentRecognizer, get_intent_recognizer, Intent, I
 
 
 class RAGSQLGenerator:
-    """RAG 检索增强 SQL 生成器 - Vanna 风格"""
+    """RAG 检索增强 SQL 生成器 - Vanna 风格 + 双存储混合检索
+    
+    检索策略：
+    - 向量数据库：语义相似度检索，适合模糊查询
+    - JSON 文件：精确匹配检索，适合关键词查询
+    - 混合检索：合并两种结果，提高召回率
+    """
     
     SQL_PROMPT_TEMPLATE = """你是一个 SQL 专家。根据以下信息生成 SQL 查询。
 
@@ -65,10 +72,11 @@ class RAGSQLGenerator:
         
         self.similarity_threshold = 0.3
         self.use_intent_recognition = True
+        self.use_hybrid_search = True
     
     def generate_sql_with_rag(self, nl_text: str, database: str,
                                schema_info: Dict[str, Any] = None) -> Dict[str, Any]:
-        """使用 RAG 增强 SQL 生成
+        """使用 RAG 增强 SQL 生成（混合检索）
         
         Args:
             nl_text: 自然语言查询
@@ -86,7 +94,8 @@ class RAGSQLGenerator:
                 "similar_sql": [],
                 "relevant_ddl": [],
                 "relevant_docs": [],
-                "intent": None
+                "intent": None,
+                "search_method": None
             },
             "method": None,
             "confidence": 0.0
@@ -105,13 +114,14 @@ class RAGSQLGenerator:
         
         enhanced_text = intent.enhanced_text if intent else nl_text
         
-        similar_sql = self._find_similar_sql(database, enhanced_text)
+        similar_sql = self._hybrid_search_sql(database, enhanced_text)
         
         if intent:
             intent_tags = self._get_intent_tags(intent)
             similar_sql = self._filter_by_intent_tags(similar_sql, intent_tags)
         
         result["context"]["similar_sql"] = similar_sql
+        result["context"]["search_method"] = "hybrid" if self.use_hybrid_search else "single"
         
         if similar_sql and similar_sql[0].get("distance", 1) < 0.2:
             best_match = similar_sql[0]
@@ -122,13 +132,13 @@ class RAGSQLGenerator:
             result["confidence"] = 1.0 - best_match.get("distance", 0.5)
             return result
         
-        relevant_ddl = self._find_relevant_ddl(database, enhanced_text)
+        relevant_ddl = self._hybrid_search_ddl(database, enhanced_text)
         if intent:
             suggested_tables = self.intent_recognizer.get_table_suggestions(intent)
             relevant_ddl = self._merge_ddl_with_suggestions(relevant_ddl, suggested_tables, database)
         result["context"]["relevant_ddl"] = relevant_ddl
         
-        relevant_docs = self._find_relevant_docs(database, enhanced_text)
+        relevant_docs = self._hybrid_search_docs(database, enhanced_text)
         if intent:
             intent_tags = self._get_intent_tags(intent)
             relevant_docs = self._filter_by_intent_tags(relevant_docs, intent_tags)
@@ -170,9 +180,9 @@ class RAGSQLGenerator:
         Returns:
             包含 prompt 和上下文的字典
         """
-        similar_sql = self._find_similar_sql(database, nl_text, top_k=3)
-        relevant_ddl = self._find_relevant_ddl(database, nl_text, top_k=5)
-        relevant_docs = self._find_relevant_docs(database, nl_text, top_k=3)
+        similar_sql = self._hybrid_search_sql(database, nl_text, top_k=3)
+        relevant_ddl = self._hybrid_search_ddl(database, nl_text, top_k=5)
+        relevant_docs = self._hybrid_search_docs(database, nl_text, top_k=3)
         
         if not relevant_ddl and schema_info:
             relevant_ddl = self._build_ddl_from_schema(schema_info)
@@ -200,6 +210,33 @@ class RAGSQLGenerator:
             "nl_text": nl_text,
             "instruction": "请根据以上 prompt 生成 SQL 查询语句，只返回 SQL，不要包含其他内容。"
         }
+    
+    def _hybrid_search_sql(self, database: str, nl_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
+        """混合检索 SQL 示例"""
+        return self.training_collector.search_similar(
+            database=database,
+            query=nl_text,
+            top_k=top_k,
+            data_type=TrainingDataCollector.DATA_TYPE_SQL
+        )
+    
+    def _hybrid_search_ddl(self, database: str, nl_text: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """混合检索 DDL"""
+        return self.training_collector.search_similar(
+            database=database,
+            query=nl_text,
+            top_k=top_k,
+            data_type=TrainingDataCollector.DATA_TYPE_DDL
+        )
+    
+    def _hybrid_search_docs(self, database: str, nl_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
+        """混合检索文档"""
+        return self.training_collector.search_similar(
+            database=database,
+            query=nl_text,
+            top_k=top_k,
+            data_type=TrainingDataCollector.DATA_TYPE_DOC
+        )
     
     def _format_ddl_section(self, relevant_ddl: List[Dict[str, Any]]) -> str:
         """格式化 DDL 部分"""
@@ -262,33 +299,6 @@ class RAGSQLGenerator:
             })
         
         return ddl_list
-    
-    def _find_similar_sql(self, database: str, nl_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
-        """查找相似的 SQL 示例"""
-        return self.training_collector.search_similar(
-            database=database,
-            query=nl_text,
-            top_k=top_k,
-            data_type=TrainingDataCollector.DATA_TYPE_SQL
-        )
-    
-    def _find_relevant_ddl(self, database: str, nl_text: str, top_k: int = 5) -> List[Dict[str, Any]]:
-        """查找相关的 DDL"""
-        return self.training_collector.search_similar(
-            database=database,
-            query=nl_text,
-            top_k=top_k,
-            data_type=TrainingDataCollector.DATA_TYPE_DDL
-        )
-    
-    def _find_relevant_docs(self, database: str, nl_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
-        """查找相关的文档"""
-        return self.training_collector.search_similar(
-            database=database,
-            query=nl_text,
-            top_k=top_k,
-            data_type=TrainingDataCollector.DATA_TYPE_DOC
-        )
     
     def _get_intent_tags(self, intent: Intent) -> List[str]:
         """从意图中提取标签"""
@@ -525,81 +535,35 @@ class RAGSQLGenerator:
             if table not in existing_tables:
                 relevant_ddl.append({
                     "content": f"表: {table}",
-                    "metadata": {"table": table, "suggested": True}
+                    "metadata": {"table": table}
                 })
         
         return relevant_ddl
-    
-    def _generate_sql_from_schema(self, nl_text: str, schema_info: Dict[str, Any],
-                                   database: str, intent: Intent = None) -> str:
-        """基于 schema 生成 SQL（降级方案）"""
-        tables = list(schema_info.get("tables", {}).keys())
-        if not tables:
-            return "SELECT 1"
-        
-        target_table = self._select_best_table(nl_text, tables, [], intent)
-        columns = [col.get("name") for col in schema_info.get("tables", {}).get(target_table, [])]
-        
-        select_clause = self._build_select_clause(nl_text, columns, intent)
-        conditions = self._extract_conditions_from_nl(nl_text)
-        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        limit_clause = self._build_limit_clause(nl_text, intent)
-        
-        return f"{select_clause} FROM {target_table} {where_clause} {limit_clause}"
     
     def _calculate_confidence(self, relevant_ddl: List[Dict[str, Any]],
                                relevant_docs: List[Dict[str, Any]],
                                similar_sql: List[Dict[str, Any]],
                                intent: Intent = None) -> float:
         """计算置信度"""
-        confidence = 0.0
-        
-        if intent:
-            confidence += intent.confidence * 0.2
+        base_confidence = 0.5
         
         if similar_sql:
-            best_distance = similar_sql[0].get("distance", 1)
-            confidence += (1.0 - best_distance) * 0.4
+            best_distance = similar_sql[0].get("distance", 0.5)
+            base_confidence += (1 - best_distance) * 0.2
         
         if relevant_ddl:
-            avg_ddl_distance = sum(d.get("distance", 0.5) for d in relevant_ddl) / len(relevant_ddl)
-            confidence += (1.0 - avg_ddl_distance) * 0.3
+            base_confidence += min(len(relevant_ddl) * 0.05, 0.2)
         
         if relevant_docs:
-            avg_doc_distance = sum(d.get("distance", 0.5) for d in relevant_docs) / len(relevant_docs)
-            confidence += (1.0 - avg_doc_distance) * 0.2
+            base_confidence += min(len(relevant_docs) * 0.03, 0.1)
         
-        return min(confidence, 1.0)
-    
-    def get_prompt_context(self, nl_text: str, database: str) -> str:
-        """获取用于 LLM 的上下文提示"""
-        similar_sql = self._find_similar_sql(database, nl_text, top_k=2)
-        relevant_ddl = self._find_relevant_ddl(database, nl_text, top_k=3)
-        relevant_docs = self._find_relevant_docs(database, nl_text, top_k=2)
+        if intent and intent.confidence > 0.7:
+            base_confidence += 0.1
         
-        context_parts = []
-        
-        if relevant_ddl:
-            context_parts.append("### 相关表结构:")
-            for ddl in relevant_ddl[:3]:
-                context_parts.append(f"```sql\n{ddl.get('content', '')}\n```")
-        
-        if similar_sql:
-            context_parts.append("\n### 相似 SQL 示例:")
-            for sql in similar_sql[:2]:
-                metadata = sql.get("metadata", {})
-                context_parts.append(f"问题: {metadata.get('question', '')}")
-                context_parts.append(f"SQL: ```sql\n{metadata.get('sql', '')}\n```")
-        
-        if relevant_docs:
-            context_parts.append("\n### 相关文档:")
-            for doc in relevant_docs[:2]:
-                context_parts.append(doc.get("content", ""))
-        
-        return "\n".join(context_parts)
+        return min(base_confidence, 1.0)
 
 
-def get_rag_sql_generator(rag_workflow=None, training_collector=None, 
-                          intent_recognizer=None) -> RAGSQLGenerator:
+def get_rag_sql_generator(rag_workflow=None, training_collector: TrainingDataCollector = None,
+                          intent_recognizer: IntentRecognizer = None) -> RAGSQLGenerator:
     """获取 RAG SQL 生成器实例"""
     return RAGSQLGenerator(rag_workflow, training_collector, intent_recognizer)

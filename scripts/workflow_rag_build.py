@@ -24,6 +24,13 @@ from db_connector import get_db_connector
 # 在文件顶部添加导入
 from metadata_extractor import MetadataExtractor
 
+# 添加训练数据收集器导入
+try:
+    from nl2sql.training_data import TrainingDataCollector, get_training_data_collector
+    TRAINING_COLLECTOR_AVAILABLE = True
+except ImportError:
+    TRAINING_COLLECTOR_AVAILABLE = False
+
 # 在 RAGBuildWorkflow 类中添加新方法
 def extract_and_index_metadata(self, db_path: str, collection) -> bool:
     """提取元数据并添加到RAG"""
@@ -86,6 +93,15 @@ class RAGBuildWorkflow:
         
         # 数据库连接器
         self.db_connector = get_db_connector()
+        
+        # 训练数据收集器（双存储架构）
+        self.training_collector = None
+        if TRAINING_COLLECTOR_AVAILABLE:
+            try:
+                self.training_collector = get_training_data_collector(self, enable_vector_store=True)
+                print("训练数据收集器已初始化（双存储模式）")
+            except Exception as e:
+                print(f"训练数据收集器初始化失败: {e}")
     
     def _generate_response(self, code: int, msg: str, data: Dict[str, Any] = None) -> Dict[str, Any]:
         """生成统一格式的响应"""
@@ -167,6 +183,20 @@ class RAGBuildWorkflow:
             
             # 标记初始化成功
             self.local_rag_initialized = True
+            
+            # 初始化训练数据收集器（双存储）
+            if TRAINING_COLLECTOR_AVAILABLE and self.training_collector is None:
+                try:
+                    self.training_collector = get_training_data_collector(self, enable_vector_store=True)
+                    print("训练数据收集器已初始化（双存储模式）")
+                except Exception as e:
+                    print(f"训练数据收集器初始化失败: {e}")
+            
+            # 同步现有训练数据到向量数据库
+            if self.training_collector and self.training_collector.rag_workflow:
+                print("同步训练数据到向量数据库...")
+                sync_result = self.training_collector.sync_json_to_vector_store("default")
+                print(f"同步结果: {sync_result}")
             
             # 加载数据字典
             self._load_data_dictionary()
