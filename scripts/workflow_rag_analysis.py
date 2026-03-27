@@ -87,6 +87,57 @@ class RAGAnalysisWorkflow:
                 result = self._schema_extractor.extract_from_duckdb(db_path, database)
             elif db_type.lower() == "sqlite":
                 result = self._schema_extractor.extract_from_sqlite(db_path, database)
+            elif db_type.lower() == "tdengine":
+                # TDengine 通过 MCP API 提取 Schema
+                tables = []
+                inferred_terms = {}
+                
+                try:
+                    # 查询所有表
+                    show_tables_query = f"SHOW TABLES FROM {database}"
+                    tables_result = self.db_connector.execute_sql(show_tables_query)
+                    
+                    if tables_result.get("code") == 0:
+                        table_data = tables_result.get("data", {}).get("data", [])
+                        
+                        for row in table_data:
+                            table_name = row[0]
+                            
+                            # 查询表结构
+                            describe_query = f"DESCRIBE {database}.{table_name}"
+                            describe_result = self.db_connector.execute_sql(describe_query)
+                            
+                            if describe_result.get("code") == 0:
+                                columns_data = describe_result.get("data", {}).get("data", [])
+                                columns = []
+                                
+                                for col_row in columns_data:
+                                    columns.append({
+                                        "name": col_row[0],
+                                        "type": col_row[1]
+                                    })
+                                
+                                tables.append({
+                                    "name": table_name,
+                                    "columns": columns
+                                })
+                                
+                                # 简单的术语推断
+                                if "time" in table_name.lower():
+                                    inferred_terms["时间"] = [table_name]
+                                elif "data" in table_name.lower():
+                                    inferred_terms["数据"] = [table_name]
+                                elif "record" in table_name.lower():
+                                    inferred_terms["记录"] = [table_name]
+                
+                except Exception as e:
+                    print(f"[Schema 自动提取] TDengine 提取失败: {e}")
+                
+                result = {
+                    "status": "success",
+                    "tables": tables,
+                    "inferred_terms": inferred_terms
+                }
             else:
                 return
             
@@ -537,7 +588,7 @@ class RAGAnalysisWorkflow:
         # 2. 评估RAG结果
         rag_has_results = False
         if rag_result.get("code") == 0 and rag_result.get("data"):
-            results = rag_result["data"].get("results", {})
+            results = rag_result.get("data", {}).get("results", {})
             if isinstance(results, dict) and "documents" in results:
                 rag_has_results = any(doc for doc_list in results["documents"] for doc in doc_list)
         
@@ -555,32 +606,33 @@ class RAGAnalysisWorkflow:
             }
             
             # 处理数据库查询结果
-            if db_results and "error" not in db_results:
+            if db_results and "error" not in db_results and isinstance(db_results, dict):
                 # 构建人类可读的结果
                 readable_results = []
                 
                 # 遍历所有表的查询结果
                 for table_name, table_data in db_results.items():
-                    columns = table_data["columns"]
-                    rows = table_data["rows"]
-                    count = table_data["count"]
-                    
-                    readable_results.append(f"\n=== 表: {table_name} (找到 {count} 条记录) ===")
-                    
-                    # 显示前5条记录
-                    for i, row in enumerate(rows[:5]):
-                        row_str = "  "
-                        for j, value in enumerate(row):
-                            if j < len(columns):
-                                col_name = columns[j]
-                                # 截断过长的文本
-                                if isinstance(value, str) and len(value) > 50:
-                                    value = value[:50] + "..."
-                                row_str += f"{col_name}={value} | "
-                        readable_results.append(row_str)
-                    
-                    if count > 5:
-                        readable_results.append(f"  ... 还有 {count - 5} 条记录")
+                    if isinstance(table_data, dict) and "columns" in table_data and "rows" in table_data and "count" in table_data:
+                        columns = table_data["columns"]
+                        rows = table_data["rows"]
+                        count = table_data["count"]
+                        
+                        readable_results.append(f"\n=== 表: {table_name} (找到 {count} 条记录) ===")
+                        
+                        # 显示前5条记录
+                        for i, row in enumerate(rows[:5]):
+                            row_str = "  "
+                            for j, value in enumerate(row):
+                                if j < len(columns):
+                                    col_name = columns[j]
+                                    # 截断过长的文本
+                                    if isinstance(value, str) and len(value) > 50:
+                                        value = value[:50] + "..."
+                                    row_str += f"{col_name}={value} | "
+                            readable_results.append(row_str)
+                        
+                        if count > 5:
+                            readable_results.append(f"  ... 还有 {count - 5} 条记录")
                 
                 enhanced_data["readable_results"] = readable_results
             
@@ -688,7 +740,12 @@ class RAGAnalysisWorkflow:
                     "nl_text": nl_text
                 }
                 result = self._enhanced_query_workflow(kb_params)
-                result["data"]["route_info"] = route_info
+                # 确保 result 有 data 字段
+                if result.get("code") == 0 and "data" in result:
+                    result["data"]["route_info"] = route_info
+                else:
+                    # 如果失败，添加路由信息到错误响应
+                    result["route_info"] = route_info
                 return result
             else:
                 route_info["reason"] = f"知识库 {kb_name} 不存在"
@@ -700,7 +757,12 @@ class RAGAnalysisWorkflow:
             route_info["reason"] = "MindsDB AI 能力可用"
             query = f"SELECT * FROM {database}.nl_query('{nl_text}')"
             result = self.db_connector.execute_sql(query)
-            result["data"]["route_info"] = route_info
+            # 确保 result 有 data 字段
+            if result.get("code") == 0 and "data" in result:
+                result["data"]["route_info"] = route_info
+            else:
+                # 如果失败，添加路由信息到错误响应
+                result["route_info"] = route_info
             return result
         
         # 策略3: 使用本地 NL2SQL 引擎
@@ -714,7 +776,12 @@ class RAGAnalysisWorkflow:
             route_info["reason"] = "使用纯规则 NL2SQL（无嵌入模型）"
         
         result = self._execute_nl2sql(params)
-        result["data"]["route_info"] = route_info
+        # 确保 result 有 data 字段
+        if result.get("code") == 0 and "data" in result:
+            result["data"]["route_info"] = route_info
+        else:
+            # 如果失败，添加路由信息到错误响应
+            result["route_info"] = route_info
         return result
     
     def _execute_init_training(self, params: Dict[str, Any]) -> Dict[str, Any]:

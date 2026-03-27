@@ -195,10 +195,15 @@ class DBConnector:
                 query = f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = 'duckdb', PARAMETERS = {{'database': '{db_path}'}}"
             else:
                 query = f"CREATE DATABASE IF NOT EXISTS {database_name}"
+        elif db_type == "tdengine":
+            # TDengine 专用参数格式
+            url = f"{host}:{port}"
+            query = f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = 'tdengine', PARAMETERS = {{'url': '{url}', 'user': '{username}', 'password': '{password}', 'database': '{database_name}'}}"
         else:
             query = f"CREATE DATABASE IF NOT EXISTS {database_name} WITH ENGINE = '{db_type}', PARAMETERS = {{'host': '{host}', 'port': {port}, 'user': '{username}', 'password': '{password}'}}"
         
-        result = self.send_mcp_request(query, host, port)
+        # MCP 请求始终发送到 MindsDB 服务器，不使用目标数据库地址
+        result = self.send_mcp_request(query)
         
         if result.get("code") == 0:
             # 缓存连接信息
@@ -213,20 +218,24 @@ class DBConnector:
     
     def list_databases(self, host: str = None, port: int = None) -> Dict[str, Any]:
         """列出所有数据库"""
-        return self.send_mcp_request("SHOW DATABASES", host, port)
+        # 始终发送到 MindsDB 服务器
+        return self.send_mcp_request("SHOW DATABASES")
     
     def show_tables(self, database: str, host: str = None, port: int = None) -> Dict[str, Any]:
         """显示指定数据库的表"""
-        return self.send_mcp_request(f"SHOW TABLES FROM {database}", host, port)
+        # 始终发送到 MindsDB 服务器
+        return self.send_mcp_request(f"SHOW TABLES FROM {database}")
     
     def describe_table(self, database: str, table: str, host: str = None, port: int = None) -> Dict[str, Any]:
         """描述表结构"""
         # TDengine 使用 SHOW COLUMNS FROM 而不是 DESCRIBE
-        return self.send_mcp_request(f"SHOW COLUMNS FROM {database}.{table}", host, port)
+        # 始终发送到 MindsDB 服务器
+        return self.send_mcp_request(f"SHOW COLUMNS FROM {database}.{table}")
     
     def execute_sql(self, sql: str, host: str = None, port: int = None) -> Dict[str, Any]:
         """执行SQL查询"""
-        return self.send_mcp_request(sql, host, port)
+        # 始终发送到 MindsDB 服务器
+        return self.send_mcp_request(sql)
 
 
 # 全局连接器实例
